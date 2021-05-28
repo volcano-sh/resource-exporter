@@ -1,2 +1,3 @@
-# cpu-topology-exporter
-CPU Topology Exportor for NUMA Aware Scheduling
+# resource-exporter
+Resource Exportor for volcano scheduling, e.g. NUMA-Aware scheduling.
+
