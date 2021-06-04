@@ -1,0 +1,89 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: resource-exporter
+  namespace: volcano-system
+rules:
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["list", "watch"]
+  - apiGroups: ["nodeinfo.volcano.sh"]
+    resources: ["numatopologies"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: resource-exporter-bind
+subjects:
+  - kind: ServiceAccount
+    name: resource-exporter-account
+    namespace: volcano-system
+roleRef:
+  kind: ClusterRole
+  name: resource-exporter
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: resource-exporter-account
+  namespace: volcano-system
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: resource-exporter-daemonset
+  namespace: volcano-system
+spec:
+  selector:
+    matchLabels:
+      name: resource-topology
+  template:
+    metadata:
+      labels:
+        name: resource-topology
+    spec:
+      serviceAccountName: resource-exporter-account
+      containers:
+        - name: resource-topology
+          image: volcanosh/numatopo:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --logtostderr
+            - --kubelet-conf=/host/kubeletconf/config.yaml
+            - --cpu-manager-state=/host/kubelet/cpu_manager_state
+            - --device-path=/host/device
+            - -v=4
+            - 2>&1
+          env:
+            - name: MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: node-path
+              mountPath: "/host/device"
+            - name: kubelet-path
+              mountPath: "/host/kubelet"
+            - name: kubelet-config-path
+              mountPath: "/host/kubeletconf"
+      volumes:
+        - name: node-path
+          hostPath:
+            path: "/sys/devices/system"
+        - name: kubelet-path
+          hostPath:
+            path: "/var/lib/kubelet"
+        - name: kubelet-config-path
+          hostPath:
+            path: "/var/lib/kubelet"
