@@ -17,8 +17,12 @@ limitations under the License.
 package util
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
+
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Parse string, such as "1,2-7,9,10-13,14"
@@ -66,4 +70,30 @@ func Parse(s string) ([]int, error) {
 	}
 
 	return result, nil
+}
+
+// ParseResourceList parses the given configuration map into an API
+// ResourceList or returns an error.
+func ParseResourceList(m map[string]string) (v1.ResourceList, error) {
+	if len(m) == 0 {
+		return nil, nil
+	}
+	rl := make(v1.ResourceList)
+	for k, v := range m {
+		switch v1.ResourceName(k) {
+		// CPU, memory, local storage, and PID resources are supported.
+		case v1.ResourceCPU, v1.ResourceMemory, v1.ResourceEphemeralStorage:
+			q, err := resource.ParseQuantity(v)
+			if err != nil {
+				return nil, err
+			}
+			if q.Sign() == -1 {
+				return nil, fmt.Errorf("resource quantity for %q cannot be negative: %v", k, v)
+			}
+			rl[v1.ResourceName(k)] = q
+		default:
+			return nil, fmt.Errorf("cannot reserve %q resource", k)
+		}
+	}
+	return rl, nil
 }

@@ -31,8 +31,8 @@ import (
 	"k8s.io/klog"
 
 	"volcano.sh/apis/pkg/client/clientset/versioned"
-
 	"volcano.sh/resource-exporter/pkg/args"
+	"volcano.sh/resource-exporter/pkg/machineinfo"
 	"volcano.sh/resource-exporter/pkg/numatopo"
 )
 
@@ -75,26 +75,33 @@ func main() {
 	go wait.Until(klog.Flush, *logFlushFreq, wait.NeverStop)
 	defer klog.Flush()
 
+	// load machine info, if this fails, will go into panic.
+	err := machineinfo.InitializeMachineInfo()
+	if err != nil {
+		klog.Fatal(err)
+	}
+
 	nodeInfoClient, err := getNumaTopoClient(opt)
 	if err != nil {
 		klog.Errorf("Get numainfo client failed, err = %v", err)
 		return
 	}
 
+	tick := time.NewTicker(opt.CheckInterval)
 	for {
-		exist, err := numatopoIsExist(nodeInfoClient)
-		if err != nil {
-			klog.Errorf("Get numatopo failed, err= %v", err)
-			time.Sleep(opt.CheckInterval)
-			continue
-		}
+		select {
+		case <-tick.C:
+			exist, err := numatopoIsExist(nodeInfoClient)
+			if err != nil {
+				klog.Errorf("Get numatopo failed, err= %v", err)
+				continue
+			}
 
-		isChg := numatopo.NodeInfoRefresh(opt)
-		if isChg || !exist {
-			klog.V(4).Infof("Node info changes.")
-			numatopo.CreateOrUpdateNumatopo(nodeInfoClient)
+			isChg := numatopo.NodeInfoRefresh(opt)
+			if isChg || !exist {
+				klog.V(4).Infof("Node info changes.")
+				numatopo.CreateOrUpdateNumatopo(nodeInfoClient)
+			}
 		}
-
-		time.Sleep(opt.CheckInterval)
 	}
 }

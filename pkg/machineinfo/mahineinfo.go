@@ -14,18 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package numatopo
+package machineinfo
 
-import (
-	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
+import v1 "github.com/google/cadvisor/info/v1"
 
-	"volcano.sh/resource-exporter/pkg/args"
-)
+var gMachineInfo *v1.MachineInfo
 
-// NumaInfo is the interface of resource topology data
-type NumaInfo interface {
-	Name() string
-	Update(opt *args.Argument) NumaInfo
-	GetResourceInfoMap() v1alpha1.ResourceInfo
-	GetResTopoDetail() interface{}
+func GetMachineInfo() *v1.MachineInfo {
+	return gMachineInfo
 }
