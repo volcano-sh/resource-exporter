@@ -25,7 +25,7 @@ type Argument struct {
 	CheckInterval     time.Duration
 	KubeletConf       string
 	DevicePath        string
-	CPUMngstate       string
+	CPUMngState       string
 	ResReserved       map[string]string
 	KubeClientOptions ClientOptions
 }
@@ -42,7 +42,7 @@ func (args *Argument) AddFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&args.CheckInterval, "check-period", defaultCheckInterval, "Burst to use while talking with kubernetes apiserver")
 	fs.StringVar(&args.KubeletConf, "kubelet-conf", args.KubeletConf, "Path to kubelet configure file")
 	fs.StringVar(&args.DevicePath, "device-path", args.DevicePath, "Path to device information")
-	fs.StringVar(&args.CPUMngstate, "cpu-manager-state", args.CPUMngstate, "Path to cpu_manager_state")
+	fs.StringVar(&args.CPUMngState, "cpu-manager-state", args.CPUMngState, "Path to cpu_manager_state")
 	fs.Var(cliflag.NewMapStringString(&args.ResReserved), "res-reserved", "kubelet reserved resource  (e.g. cpu=200m,memory=500Mi")
 
 	fs.StringVar(&args.KubeClientOptions.Master, "master", args.KubeClientOptions.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")

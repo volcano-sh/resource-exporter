@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/golang/protobuf v1.4.3 // indirect
+	github.com/google/cadvisor v0.37.3
 	github.com/imdario/mergo v0.3.10 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.5.1 // indirect

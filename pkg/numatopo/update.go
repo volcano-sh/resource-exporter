@@ -26,7 +26,6 @@ import (
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 	"volcano.sh/apis/pkg/client/clientset/versioned"
-
 	"volcano.sh/resource-exporter/pkg/args"
 )
 
@@ -34,15 +33,14 @@ import (
 func NodeInfoRefresh(opt *args.Argument) bool {
 	isChange := false
 
-	if GetkubeletConfig(opt.KubeletConf, opt.ResReserved) {
-		isChange = true
+	klConfig, err := GetKubeletConfigFromLocalFile(opt.KubeletConf)
+	if err != nil {
+		klog.Errorf("failed to get kubelet configuration, err: %v", err)
+	} else {
+		isChange = TryUpdatingResourceReservation(klConfig, opt.ResReserved)
 	}
 
-	if TopoInfoUpdate(opt) {
-		isChange = true
-	}
-
-	return isChange
+	return isChange || TopoInfoUpdate(opt)
 }
 
 // CreateOrUpdateNumatopo create or update the numatopo to etcd

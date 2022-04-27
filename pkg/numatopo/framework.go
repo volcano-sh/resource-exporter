@@ -24,7 +24,7 @@ import (
 
 var numaMap = map[string]NumaInfo{}
 
-// RegisterNumaType is the funtion to register the info provider
+// RegisterNumaType is the function to register the info provider
 func RegisterNumaType(info NumaInfo) {
 	numaMap[info.Name()] = info
 }
@@ -47,7 +47,7 @@ func TopoInfoUpdate(opt *args.Argument) bool {
 	return isChg
 }
 
-// GetAllResAllocatableInfo returns the latest info abaut the allocatable nums of all resource
+// GetAllResAllocatableInfo returns the latest info about the allocatable nums of all resource
 func GetAllResAllocatableInfo() map[string]v1alpha1.ResourceInfo {
 	numaResMap := make(map[string]v1alpha1.ResourceInfo)
 
