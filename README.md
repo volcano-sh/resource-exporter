@@ -20,7 +20,7 @@ Resource Exporter supports the CPU NUMA topology resource so far.  More resource
 
 ### Installation
 
-#### 1. Edit the file ./installer/numa-topo.yaml
+#### 1. Edit the file [./installer/numa-topo.yaml](https://github.com/volcano-sh/resource-exporter/blob/master/installer/numa-topo.yaml)
 
 There are some options which you can use to configure
 
