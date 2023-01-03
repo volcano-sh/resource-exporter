@@ -18,7 +18,9 @@ package numatopo
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,6 +83,12 @@ func CreateOrUpdateNumatopo(client *versioned.Clientset) {
 			NumaResMap:  GetAllResAllocatableInfo(),
 			CPUDetail:   GetCpusDetail(),
 		}
+		if numaInfo.Annotations == nil {
+			numaInfo.Annotations = make(map[string]string)
+		}
+		// use to trigger CR numa update
+		numaInfo.Annotations["timestamp"] = fmt.Sprint(time.Now().Unix())
+
 		_, err = client.NodeinfoV1alpha1().Numatopologies().Update(context.TODO(), numaInfo, metav1.UpdateOptions{})
 		if err != nil {
 			klog.Errorf("Update Numatopo for node %s failed, err=%v", hostname, err)
