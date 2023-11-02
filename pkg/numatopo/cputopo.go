@@ -33,7 +33,7 @@ import (
 	"volcano.sh/resource-exporter/pkg/util"
 )
 
-// CPUNumaInfo is the obkect to maintain the cpu information
+// CPUNumaInfo is the object to maintain the cpu information
 type CPUNumaInfo struct {
 	NUMANodes   []int
 	NUMA2CpuCap map[int]int
