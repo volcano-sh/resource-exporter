@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -88,20 +89,20 @@ func main() {
 	}
 	klog.V(2).Infof("Numatopology informer cache synced successfully")
 
-	tick := time.NewTicker(opt.CheckInterval)
-	for {
-		select {
-		case <-tick.C:
-			cached, err := numaCache.Get()
-			exist := err == nil && cached != nil
+	// Use wait.UntilWithContext to periodically check and update Numatopology
+	// This replaces the manual for-select loop with ticker
+	wait.UntilWithContext(context.TODO(), func(ctx context.Context) {
+		// Get current resource from informer cache
+		cached, err := numaCache.Get()
+		exist := err == nil && cached != nil
 
-			// Check local file changes (kubelet cpu_manager_state, etc.)
-			isChg := numatopo.NodeInfoRefresh(opt)
+		// Check local file changes (kubelet cpu_manager_state, etc.)
+		isChg := numatopo.NodeInfoRefresh(opt)
 
-			if isChg || !exist {
-				klog.V(4).Infof("Node info changes detected, updating Numatopology.")
-				numatopo.CreateOrUpdateNumatopo(nodeInfoClient, cached)
-			}
+		// Create or update if there are changes or resource doesn't exist
+		if isChg || !exist {
+			klog.V(4).Infof("Node info changes detected, updating Numatopology.")
+			numatopo.CreateOrUpdateNumatopo(nodeInfoClient, cached)
 		}
-	}
+	}, opt.CheckInterval)
 }
