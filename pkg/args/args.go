@@ -1,3 +1,4 @@
+// Package args defines command-line configuration options for the resource exporter.
 package args
 
 import (

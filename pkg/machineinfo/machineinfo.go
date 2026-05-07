@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package machineinfo provides machine capacity information from sysfs and procfs.
 package machineinfo
 
 import (
@@ -31,11 +32,11 @@ var gMachineCapacity v1.ResourceList
 
 // InitializeMachineInfo reads machine capacity from sysfs/procfs.
 func InitializeMachineInfo() error {
-	cap, err := capacity.FromSysfs(defaultCPUOnlinePath, defaultMeminfoPath)
+	resources, err := capacity.FromSysfs(defaultCPUOnlinePath, defaultMeminfoPath)
 	if err != nil {
 		return err
 	}
-	gMachineCapacity = cap
+	gMachineCapacity = resources
 	return nil
 }
 

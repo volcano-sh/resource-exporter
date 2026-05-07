@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package util provides parsing utilities for resource quantities and CPU ranges.
 package util
 
 import (

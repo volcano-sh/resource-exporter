@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package numatopo collects NUMA topology information and publishes it as
+// Volcano Numatopology custom resources.
 package numatopo
 
 import (
@@ -80,7 +82,7 @@ func (info *CPUNumaInfo) cpu2numa(cpuid int) int {
 	return info.cpu2NUMA[cpuid]
 }
 
-func getNumaNodeCpuCap(nodePath string, nodeID int) []int {
+func getNumaNodeCPUCap(nodePath string, nodeID int) []int {
 	cpuPath := filepath.Join(nodePath, fmt.Sprintf("node%d", nodeID), "cpulist")
 	data, err := os.ReadFile(cpuPath)
 	if err != nil {
@@ -121,7 +123,7 @@ func getFreeCPUList(cpuMngState string) []int {
 
 func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
 	for _, node := range info.NUMANodes {
-		cpuList := getNumaNodeCpuCap(numaPath, node)
+		cpuList := getNumaNodeCPUCap(numaPath, node)
 		info.NUMA2CpuCap[node] = len(cpuList)
 
 		for _, cpu := range cpuList {
@@ -157,7 +159,7 @@ func (info *CPUNumaInfo) Update(opt *args.Argument) NumaInfo {
 func (info *CPUNumaInfo) getAllCPUTopoInfo(devicePath string) map[int]v1alpha1.CPUInfo {
 	cpuTopoInfo := make(map[int]v1alpha1.CPUInfo)
 	for cpuID, numaID := range info.cpu2NUMA {
-		coreID, socketID, err := getCoreIDSocketIDForCpu(devicePath, cpuID)
+		coreID, socketID, err := getCoreIDSocketIDForCPU(devicePath, cpuID)
 		if err != nil {
 			klog.Errorf("Get cpu detail failed, err=<%v>", err)
 			return nil
@@ -173,7 +175,7 @@ func (info *CPUNumaInfo) getAllCPUTopoInfo(devicePath string) map[int]v1alpha1.C
 	return cpuTopoInfo
 }
 
-func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int, err error) {
+func getCoreIDSocketIDForCPU(devicePath string, cpuID int) (coreID, socketID int, err error) {
 	topoPath := filepath.Join(devicePath, fmt.Sprintf("cpu/cpu%d", cpuID), "topology")
 	corePath := filepath.Join(topoPath, "core_id")
 	data, err := os.ReadFile(corePath)
