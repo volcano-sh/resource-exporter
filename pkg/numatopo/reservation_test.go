@@ -23,17 +23,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
-
-	machineinfov1 "github.com/google/cadvisor/info/v1"
 )
 
-const (
-	_1GBMem uint64 = 1024 * 1024 * 1024
-)
-
-var machineInfo = machineinfov1.MachineInfo{
-	NumCores:       4,
-	MemoryCapacity: 4 * _1GBMem,
+var machineCapacity = v1.ResourceList{
+	v1.ResourceCPU:    *resource.NewQuantity(4, resource.DecimalSI),
+	v1.ResourceMemory: *resource.NewQuantity(4*1024*1024*1024, resource.BinarySI),
 }
 
 func TestReservationCalculation(t *testing.T) {
@@ -82,7 +76,7 @@ func TestReservationCalculation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		reservation, err := calculateNodeResourceReservation(tc.kletConfg.KubeReserved, tc.kletConfg.SystemReserved, tc.kletConfg.EvictionHard, &machineInfo)
+		reservation, err := calculateNodeResourceReservation(tc.kletConfg.KubeReserved, tc.kletConfg.SystemReserved, tc.kletConfg.EvictionHard, machineCapacity)
 		if err != nil {
 			t.Error(err)
 			return

@@ -18,18 +18,18 @@ package numatopo
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 
-	"k8s.io/klog"
-	cpustate "k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
-	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
+	klog "k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 
 	"volcano.sh/resource-exporter/pkg/args"
+	"volcano.sh/resource-exporter/pkg/internal/checkpoint"
+	"volcano.sh/resource-exporter/pkg/internal/cpuset"
 	"volcano.sh/resource-exporter/pkg/util"
 )
 
@@ -61,7 +61,7 @@ func (info *CPUNumaInfo) Name() string {
 }
 
 func getNumaOnline(onlinePath string) []int {
-	data, err := ioutil.ReadFile(onlinePath)
+	data, err := os.ReadFile(onlinePath)
 	if err != nil {
 		klog.Errorf("Read numa online file failed, err=%v.", err)
 		return []int{}
@@ -82,7 +82,7 @@ func (info *CPUNumaInfo) cpu2numa(cpuid int) int {
 
 func getNumaNodeCpuCap(nodePath string, nodeID int) []int {
 	cpuPath := filepath.Join(nodePath, fmt.Sprintf("node%d", nodeID), "cpulist")
-	data, err := ioutil.ReadFile(cpuPath)
+	data, err := os.ReadFile(cpuPath)
 	if err != nil {
 		klog.Errorf("Read node%d cpulist file failed, err: %v", nodeID, err)
 		return nil
@@ -98,18 +98,21 @@ func getNumaNodeCpuCap(nodePath string, nodeID int) []int {
 }
 
 func getFreeCPUList(cpuMngState string) []int {
-	data, err := ioutil.ReadFile(cpuMngState)
+	data, err := os.ReadFile(cpuMngState)
 	if err != nil {
 		klog.Errorf("Read cpu_manager_state failed, err: %v", err)
 		return nil
 	}
 
-	checkpoint := cpustate.NewCPUManagerCheckpoint()
-	checkpoint.UnmarshalCheckpoint(data)
+	cp, err := checkpoint.ParseCPUManagerState(data)
+	if err != nil {
+		klog.Errorf("Unmarshal cpu_manager_state failed, err: %v", err)
+		return nil
+	}
 
-	cpuList, apiErr := util.Parse(checkpoint.DefaultCPUSet)
+	cpuList, apiErr := util.Parse(cp.DefaultCPUSet)
 	if apiErr != nil {
-		klog.Errorf("Parse cpu_manager_state failed, err: %v", err)
+		klog.Errorf("Parse cpu_manager_state failed, err: %v", apiErr)
 		return nil
 	}
 
@@ -136,7 +139,7 @@ func (info *CPUNumaInfo) numaAllocUpdate(cpuMngState string) {
 }
 
 // Update returns the latest cpu numa info
-// if data is changed , return the latest , otherwise nil
+// if data is changed, return the latest, otherwise nil
 func (info *CPUNumaInfo) Update(opt *args.Argument) NumaInfo {
 	cpuNumaBasePath := filepath.Join(opt.DevicePath, "node")
 	newInfo := NewCPUNumaInfo()
@@ -173,7 +176,7 @@ func (info *CPUNumaInfo) getAllCPUTopoInfo(devicePath string) map[int]v1alpha1.C
 func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int, err error) {
 	topoPath := filepath.Join(devicePath, fmt.Sprintf("cpu/cpu%d", cpuID), "topology")
 	corePath := filepath.Join(topoPath, "core_id")
-	data, err := ioutil.ReadFile(corePath)
+	data, err := os.ReadFile(corePath)
 	if err != nil {
 		return 0, 0, fmt.Errorf("cpu %d read core_id file failed", cpuID)
 	}
@@ -186,14 +189,14 @@ func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int
 	coreID = tmpData[0]
 
 	socketPath := filepath.Join(topoPath, "physical_package_id")
-	data, err = ioutil.ReadFile(socketPath)
+	data, err = os.ReadFile(socketPath)
 	if err != nil {
-		return 0, 0, fmt.Errorf("cpu %d read scoket_id file failed", cpuID)
+		return 0, 0, fmt.Errorf("cpu %d read socket_id file failed", cpuID)
 	}
 
 	tmpData, apiErr = util.Parse(string(data))
 	if apiErr != nil {
-		return 0, 0, fmt.Errorf("cpu %d scoket_id parse failed", cpuID)
+		return 0, 0, fmt.Errorf("cpu %d socket_id parse failed", cpuID)
 	}
 
 	socketID = tmpData[0]
@@ -203,21 +206,21 @@ func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int
 
 // GetResourceInfoMap return the cpu topology info
 func (info *CPUNumaInfo) GetResourceInfoMap() v1alpha1.ResourceInfo {
-	sets := cpuset.NewCPUSet()
-	var cap = 0
+	sets := cpuset.New()
+	capacity := 0
 
 	for _, freeCpus := range info.NUMA2FreeCpus {
-		tmp := cpuset.NewCPUSet(freeCpus...)
+		tmp := cpuset.New(freeCpus...)
 		sets = sets.Union(tmp)
 	}
 
 	for numaID := range info.NUMA2CpuCap {
-		cap += info.NUMA2CpuCap[numaID]
+		capacity += info.NUMA2CpuCap[numaID]
 	}
 
 	return v1alpha1.ResourceInfo{
 		Allocatable: sets.String(),
-		Capacity:    cap,
+		Capacity:    capacity,
 	}
 }
 

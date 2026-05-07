@@ -62,7 +62,6 @@ func Parse(s string) ([]int, error) {
 				return []int{}, err
 			}
 			// Add all elements to the result.
-			// e.g. "0-5", "46-48" => [0, 1, 2, 3, 4, 5, 46, 47, 48].
 			for e := start; e <= end; e++ {
 				result = append(result, e)
 			}
@@ -81,7 +80,6 @@ func ParseResourceList(m map[string]string) (v1.ResourceList, error) {
 	rl := make(v1.ResourceList)
 	for k, v := range m {
 		switch v1.ResourceName(k) {
-		// CPU, memory, local storage, and PID resources are supported.
 		case v1.ResourceCPU, v1.ResourceMemory, v1.ResourceEphemeralStorage:
 			q, err := resource.ParseQuantity(v)
 			if err != nil {

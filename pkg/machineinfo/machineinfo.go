@@ -16,10 +16,30 @@ limitations under the License.
 
 package machineinfo
 
-import v1 "github.com/google/cadvisor/info/v1"
+import (
+	v1 "k8s.io/api/core/v1"
 
-var gMachineInfo *v1.MachineInfo
+	"volcano.sh/resource-exporter/pkg/internal/capacity"
+)
 
-func GetMachineInfo() *v1.MachineInfo {
-	return gMachineInfo
+const (
+	defaultCPUOnlinePath = "/sys/devices/system/cpu/online"
+	defaultMeminfoPath   = "/proc/meminfo"
+)
+
+var gMachineCapacity v1.ResourceList
+
+// InitializeMachineInfo reads machine capacity from sysfs/procfs.
+func InitializeMachineInfo() error {
+	cap, err := capacity.FromSysfs(defaultCPUOnlinePath, defaultMeminfoPath)
+	if err != nil {
+		return err
+	}
+	gMachineCapacity = cap
+	return nil
+}
+
+// GetMachineCapacity returns the machine's resource capacity.
+func GetMachineCapacity() v1.ResourceList {
+	return gMachineCapacity
 }
