@@ -14,12 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package main implements the resource-exporter daemon that exports NUMA
+// topology information to the Volcano scheduler.
 package main
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -28,7 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cliflag "k8s.io/component-base/cli/flag"
-	"k8s.io/klog"
+	klog "k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/client/clientset/versioned"
 	"volcano.sh/resource-exporter/pkg/args"
@@ -37,6 +41,8 @@ import (
 )
 
 var logFlushFreq = pflag.Duration("log-flush-frequency", 5*time.Second, "Maximum number of seconds between log flushes")
+
+const envNodeName = "MY_NODE_NAME"
 
 func getNumaTopoClient(argument *args.Argument) (*versioned.Clientset, error) {
 	config, err := args.BuildConfig(argument.KubeClientOptions)
@@ -48,9 +54,9 @@ func getNumaTopoClient(argument *args.Argument) (*versioned.Clientset, error) {
 }
 
 func numatopoIsExist(client *versioned.Clientset) (bool, error) {
-	hostname := os.Getenv("MY_NODE_NAME")
+	hostname := os.Getenv(envNodeName)
 	if hostname == "" {
-		return false, fmt.Errorf("get Hostname failed")
+		return false, fmt.Errorf("environment variable %s is not set", envNodeName)
 	}
 
 	_, err := client.NodeinfoV1alpha1().Numatopologies().Get(context.TODO(), hostname, metav1.GetOptions{})
@@ -72,7 +78,10 @@ func main() {
 	opt.AddFlags(pflag.CommandLine)
 	cliflag.InitFlags()
 
-	go wait.Until(klog.Flush, *logFlushFreq, wait.NeverStop)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer cancel()
+
+	go wait.Until(klog.Flush, *logFlushFreq, ctx.Done())
 	defer klog.Flush()
 
 	// load machine info, if this fails, will go into panic.
@@ -87,9 +96,16 @@ func main() {
 		return
 	}
 
+	klog.Infof("Starting resource-exporter with check interval %v", opt.CheckInterval)
+
 	tick := time.NewTicker(opt.CheckInterval)
+	defer tick.Stop()
+
 	for {
 		select {
+		case <-ctx.Done():
+			klog.Infof("Received shutdown signal, exiting gracefully")
+			return
 		case <-tick.C:
 			exist, err := numatopoIsExist(nodeInfoClient)
 			if err != nil {

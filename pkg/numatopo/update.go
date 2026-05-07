@@ -24,12 +24,14 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog"
+	klog "k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 	"volcano.sh/apis/pkg/client/clientset/versioned"
 	"volcano.sh/resource-exporter/pkg/args"
 )
+
+const envNodeName = "MY_NODE_NAME"
 
 // NodeInfoRefresh check the data changes
 func NodeInfoRefresh(opt *args.Argument) bool {
@@ -47,9 +49,9 @@ func NodeInfoRefresh(opt *args.Argument) bool {
 
 // CreateOrUpdateNumatopo create or update the numatopo to etcd
 func CreateOrUpdateNumatopo(client *versioned.Clientset) {
-	hostname := os.Getenv("MY_NODE_NAME")
+	hostname := os.Getenv(envNodeName)
 	if hostname == "" {
-		klog.Errorf("Get env MY_NODE_NAME failed.")
+		klog.Errorf("Environment variable %s is not set", envNodeName)
 		return
 	}
 
