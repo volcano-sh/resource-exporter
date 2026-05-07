@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package main implements the resource-exporter daemon that exports NUMA
+// topology information to the Volcano scheduler.
 package main
 
 import (
@@ -28,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cliflag "k8s.io/component-base/cli/flag"
-	"k8s.io/klog"
+	klog "k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/client/clientset/versioned"
 	"volcano.sh/resource-exporter/pkg/args"
@@ -88,20 +90,17 @@ func main() {
 	}
 
 	tick := time.NewTicker(opt.CheckInterval)
-	for {
-		select {
-		case <-tick.C:
-			exist, err := numatopoIsExist(nodeInfoClient)
-			if err != nil {
-				klog.Errorf("Get numatopo failed, err= %v", err)
-				continue
-			}
+	for range tick.C {
+		exist, err := numatopoIsExist(nodeInfoClient)
+		if err != nil {
+			klog.Errorf("Get numatopo failed, err= %v", err)
+			continue
+		}
 
-			isChg := numatopo.NodeInfoRefresh(opt)
-			if isChg || !exist {
-				klog.V(4).Infof("Node info changes.")
-				numatopo.CreateOrUpdateNumatopo(nodeInfoClient)
-			}
+		isChg := numatopo.NodeInfoRefresh(opt)
+		if isChg || !exist {
+			klog.V(4).Infof("Node info changes.")
+			numatopo.CreateOrUpdateNumatopo(nodeInfoClient)
 		}
 	}
 }

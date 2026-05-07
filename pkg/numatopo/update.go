@@ -24,7 +24,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog"
+	klog "k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 	"volcano.sh/apis/pkg/client/clientset/versioned"

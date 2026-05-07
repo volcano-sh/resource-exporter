@@ -18,20 +18,17 @@ package numatopo
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
-
-	machineinfov1 "github.com/google/cadvisor/info/v1"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/klog"
+	klog "k8s.io/klog/v2"
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
-	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
-	"k8s.io/kubernetes/pkg/kubelet/eviction"
 	"sigs.k8s.io/yaml"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
+	"volcano.sh/resource-exporter/pkg/internal/eviction"
 	"volcano.sh/resource-exporter/pkg/machineinfo"
 	"volcano.sh/resource-exporter/pkg/util"
 )
@@ -58,7 +55,7 @@ func GetResReserved() map[string]string {
 
 // GetKubeletConfigFromLocalFile get kubelet configuration from kubelet config file
 func GetKubeletConfigFromLocalFile(kubeletConfigPath string) (*kubeletconfigv1beta1.KubeletConfiguration, error) {
-	kubeletBytes, err := ioutil.ReadFile(kubeletConfigPath)
+	kubeletBytes, err := os.ReadFile(kubeletConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +69,7 @@ func GetKubeletConfigFromLocalFile(kubeletConfigPath string) (*kubeletconfigv1be
 
 // TryUpdatingResourceReservation try to update reservation based on opt.ResReserved and kubelet configuration
 func TryUpdatingResourceReservation(klConfig *kubeletconfigv1beta1.KubeletConfiguration, optResReserved map[string]string) bool {
-	var isChange bool = false
+	isChange := false
 	policy := make(map[v1alpha1.PolicyName]string)
 	policy[v1alpha1.CPUManagerPolicy] = klConfig.CPUManagerPolicy
 	policy[v1alpha1.TopologyManagerPolicy] = klConfig.TopologyManagerPolicy
@@ -89,17 +86,14 @@ func TryUpdatingResourceReservation(klConfig *kubeletconfigv1beta1.KubeletConfig
 	if _, ok := optResReserved[string(v1.ResourceCPU)]; ok {
 		cpuReserved = optResReserved[string(v1.ResourceCPU)]
 	} else {
-		// machine info is guaranteed at starting
-		mi := machineinfo.GetMachineInfo()
-		ReservedRes, err := calculateNodeResourceReservation(klConfig.KubeReserved, klConfig.SystemReserved, klConfig.EvictionHard, mi)
-		klog.Infof("%+v", ReservedRes)
-		// err won't happen regularly, unless there wrong configurations on kubelet, which would also lead to stop kubelet.
-		// so let just take the default value as 0
+		machineCapacity := machineinfo.GetMachineCapacity()
+		reservedRes, err := calculateNodeResourceReservation(klConfig.KubeReserved, klConfig.SystemReserved, klConfig.EvictionHard, machineCapacity)
+		klog.V(4).Infof("calculated resource reservation: %+v", reservedRes)
 		if err != nil {
 			cpuReserved = resource.NewQuantity(0, resource.DecimalSI).String()
 			klog.Warningf("failed to calculate cpu reservation, err: %v", err)
 		} else {
-			cpuReserved = ReservedRes.Cpu().String()
+			cpuReserved = reservedRes.Cpu().String()
 		}
 	}
 
@@ -111,7 +105,7 @@ func TryUpdatingResourceReservation(klConfig *kubeletconfigv1beta1.KubeletConfig
 	return isChange
 }
 
-func calculateNodeResourceReservation(kubeReserved, systemReserved, evictionHard map[string]string, mInfo *machineinfov1.MachineInfo) (v1.ResourceList, error) {
+func calculateNodeResourceReservation(kubeReserved, systemReserved, evictionHard map[string]string, machineCapacity v1.ResourceList) (v1.ResourceList, error) {
 	kubeRes, err := util.ParseResourceList(kubeReserved)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse KubeReserved, err: %v", err)
@@ -122,18 +116,12 @@ func calculateNodeResourceReservation(kubeReserved, systemReserved, evictionHard
 		return nil, fmt.Errorf("failed to parse SystemReserved, err: %v", err)
 	}
 
-	hardEvictionThresholds, err := eviction.ParseThresholdConfig([]string{}, evictionHard, nil, nil, nil)
+	hardEvictionThresholds, err := eviction.ParseThresholdConfig(evictionHard)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse hard eviction, err: %v", err)
 	}
 
-	var (
-		evictionReservation v1.ResourceList
-		machineCapacity     v1.ResourceList
-	)
-
-	machineCapacity = cadvisor.CapacityFromMachineInfo(mInfo)
-	evictionReservation = util.HardEvictionReservation(hardEvictionThresholds, machineCapacity)
+	evictionReservation := eviction.HardEvictionReservation(hardEvictionThresholds, machineCapacity)
 
 	result := make(v1.ResourceList)
 	for metric := range machineCapacity {
