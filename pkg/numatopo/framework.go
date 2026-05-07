@@ -17,21 +17,31 @@ limitations under the License.
 package numatopo
 
 import (
+	"sync"
+
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 
 	"volcano.sh/resource-exporter/pkg/args"
 )
 
-var numaMap = map[string]NumaInfo{}
+var (
+	numaMap   = map[string]NumaInfo{}
+	numaMapMu sync.RWMutex
+)
 
 // RegisterNumaType is the function to register the info provider
 func RegisterNumaType(info NumaInfo) {
+	numaMapMu.Lock()
+	defer numaMapMu.Unlock()
 	numaMap[info.Name()] = info
 }
 
 // TopoInfoUpdate get the latest node topology information
 // if info is changed , return true
 func TopoInfoUpdate(opt *args.Argument) bool {
+	numaMapMu.Lock()
+	defer numaMapMu.Unlock()
+
 	isChg := false
 
 	for str, info := range numaMap {
@@ -49,6 +59,9 @@ func TopoInfoUpdate(opt *args.Argument) bool {
 
 // GetAllResAllocatableInfo returns the latest info about the allocatable nums of all resource
 func GetAllResAllocatableInfo() map[string]v1alpha1.ResourceInfo {
+	numaMapMu.RLock()
+	defer numaMapMu.RUnlock()
+
 	numaResMap := make(map[string]v1alpha1.ResourceInfo)
 
 	for str, info := range numaMap {
@@ -60,6 +73,9 @@ func GetAllResAllocatableInfo() map[string]v1alpha1.ResourceInfo {
 
 // GetCpusDetail returns the cpu capability topology info
 func GetCpusDetail() map[string]v1alpha1.CPUInfo {
+	numaMapMu.RLock()
+	defer numaMapMu.RUnlock()
+
 	for _, info := range numaMap {
 		obj := info.GetResTopoDetail()
 		cpuDetail, ok := obj.(map[string]v1alpha1.CPUInfo)

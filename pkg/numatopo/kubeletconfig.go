@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sync"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -38,18 +39,25 @@ type kubeletConfig struct {
 	resReserved map[string]string
 }
 
-var config = &kubeletConfig{
-	topoPolicy:  make(map[v1alpha1.PolicyName]string),
-	resReserved: make(map[string]string),
-}
+var (
+	configMu sync.RWMutex
+	config   = &kubeletConfig{
+		topoPolicy:  make(map[v1alpha1.PolicyName]string),
+		resReserved: make(map[string]string),
+	}
+)
 
 // GetPolicy return the topology manager policy on kubelet
 func GetPolicy() map[v1alpha1.PolicyName]string {
+	configMu.RLock()
+	defer configMu.RUnlock()
 	return config.topoPolicy
 }
 
 // GetResReserved return the reserved info about all resource
 func GetResReserved() map[string]string {
+	configMu.RLock()
+	defer configMu.RUnlock()
 	return config.resReserved
 }
 
@@ -69,6 +77,9 @@ func GetKubeletConfigFromLocalFile(kubeletConfigPath string) (*kubeletconfigv1be
 
 // TryUpdatingResourceReservation try to update reservation based on opt.ResReserved and kubelet configuration
 func TryUpdatingResourceReservation(klConfig *kubeletconfigv1beta1.KubeletConfiguration, optResReserved map[string]string) bool {
+	configMu.Lock()
+	defer configMu.Unlock()
+
 	isChange := false
 	policy := make(map[v1alpha1.PolicyName]string)
 	policy[v1alpha1.CPUManagerPolicy] = klConfig.CPUManagerPolicy
