@@ -88,6 +88,9 @@ func parseThreshold(signal Signal, value string) (Threshold, error) {
 		if err != nil {
 			return t, err
 		}
+		if pct < 0 || pct > 100 {
+			return t, fmt.Errorf("percentage must be between 0 and 100, got: %v", pct)
+		}
 		t.Value.Percentage = pct / 100.0
 	} else {
 		q, err := resource.ParseQuantity(value)

@@ -68,6 +68,9 @@ func countCPUs(s string) (int, error) {
 	for _, r := range ranges {
 		parts := strings.Split(r, "-")
 		if len(parts) == 1 {
+			if _, err := strconv.Atoi(strings.TrimSpace(parts[0])); err != nil {
+				return 0, err
+			}
 			count++
 		} else if len(parts) == 2 {
 			start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
@@ -77,6 +80,9 @@ func countCPUs(s string) (int, error) {
 			end, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 			if err != nil {
 				return 0, err
+			}
+			if end < start {
+				return 0, fmt.Errorf("invalid CPU range: start %d > end %d", start, end)
 			}
 			count += end - start + 1
 		}

@@ -88,7 +88,7 @@ func TryUpdatingResourceReservation(klConfig *kubeletconfigv1beta1.KubeletConfig
 	} else {
 		machineCapacity := machineinfo.GetMachineCapacity()
 		reservedRes, err := calculateNodeResourceReservation(klConfig.KubeReserved, klConfig.SystemReserved, klConfig.EvictionHard, machineCapacity)
-		klog.Infof("%+v", reservedRes)
+		klog.V(4).Infof("calculated resource reservation: %+v", reservedRes)
 		if err != nil {
 			cpuReserved = resource.NewQuantity(0, resource.DecimalSI).String()
 			klog.Warningf("failed to calculate cpu reservation, err: %v", err)
