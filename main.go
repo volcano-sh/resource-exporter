@@ -22,10 +22,9 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	cliflag "k8s.io/component-base/cli/flag"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/client/clientset/versioned"
 	"volcano.sh/resource-exporter/pkg/args"
@@ -90,7 +89,6 @@ func main() {
 	klog.V(2).Infof("Numatopology informer cache synced successfully")
 
 	// Use wait.UntilWithContext to periodically check and update Numatopology
-	// This replaces the manual for-select loop with ticker
 	wait.UntilWithContext(context.TODO(), func(ctx context.Context) {
 		// Get current resource from informer cache
 		cached, err := numaCache.Get()
@@ -98,6 +96,7 @@ func main() {
 
 		// Check local file changes (kubelet cpu_manager_state, etc.)
 		isChg := numatopo.NodeInfoRefresh(opt)
+		klog.V(4).Infof("Local file changes within the interval: %v", isChg)
 
 		// Create or update if there are changes or resource doesn't exist
 		if isChg || !exist {

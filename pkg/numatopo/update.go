@@ -23,10 +23,11 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 	"volcano.sh/apis/pkg/client/clientset/versioned"
+
 	"volcano.sh/resource-exporter/pkg/args"
 )
 
@@ -41,7 +42,11 @@ func NodeInfoRefresh(opt *args.Argument) bool {
 		isChange = TryUpdatingResourceReservation(klConfig, opt.ResReserved)
 	}
 
-	return isChange || TopoInfoUpdate(opt)
+	if TopoInfoUpdate(opt) {
+		isChange = true
+	}
+
+	return isChange
 }
 
 // CreateOrUpdateNumatopo creates or updates the numatopo to etcd.

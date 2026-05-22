@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Volcano Authors.
+Copyright 2026 The Volcano Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 	"volcano.sh/apis/pkg/client/clientset/versioned"
@@ -59,24 +59,6 @@ func NewNumatopoCache(client versioned.Interface, nodeName string, resyncPeriod 
 		informer: numaInformer.Informer(),
 		nodeName: nodeName,
 	}
-
-	// Add event handlers for logging (optional, useful for debugging)
-	numaInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			numa := obj.(*v1alpha1.Numatopology)
-			klog.V(4).Infof("Numatopology added to cache: %s", numa.Name)
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			oldNuma := oldObj.(*v1alpha1.Numatopology)
-			newNuma := newObj.(*v1alpha1.Numatopology)
-			klog.V(4).Infof("Numatopology updated in cache: %s, ResourceVersion: %s -> %s",
-				newNuma.Name, oldNuma.ResourceVersion, newNuma.ResourceVersion)
-		},
-		DeleteFunc: func(obj interface{}) {
-			numa := obj.(*v1alpha1.Numatopology)
-			klog.V(4).Infof("Numatopology deleted from cache: %s", numa.Name)
-		},
-	})
 
 	return c
 }
