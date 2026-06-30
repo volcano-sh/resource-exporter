@@ -17,13 +17,16 @@ limitations under the License.
 package numatopo
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 
 	"k8s.io/klog/v2"
+	podresv1 "k8s.io/kubelet/pkg/apis/podresources/v1"
 	cpustate "k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
 	"k8s.io/utils/cpuset"
 
@@ -116,6 +119,42 @@ func getFreeCPUList(cpuMngState string) []int {
 	return cpuList
 }
 
+// GetFreeCPUListByPodResources returns a list of free (unallocated) CPU IDs by calling the PodResources API.
+func GetFreeCPUListByPodResources(cpu2NUMA map[int]int) []int {
+	if client == nil {
+		klog.Errorf("PodResourcesListerClient is not initialized")
+		return nil
+	}
+
+	resp, err := client.List(context.Background(), &podresv1.ListPodResourcesRequest{})
+	if err != nil {
+		klog.Errorf("Failed to list pod resources: %v", err)
+		return nil
+	}
+
+	// Collecting IDs of Used CPUs
+	usedCPUs := make(map[int]bool)
+	for _, pod := range resp.PodResources {
+		for _, container := range pod.Containers {
+			for _, cpuID := range container.CpuIds {
+				usedCPUs[int(cpuID)] = true
+			}
+		}
+	}
+
+	// Traverse cpu2NUMA to find the IDs of unused CPUs
+	var freeCPUs []int
+	for cpuID := range cpu2NUMA {
+		if !usedCPUs[cpuID] {
+			freeCPUs = append(freeCPUs, cpuID)
+		}
+	}
+
+	sort.Ints(freeCPUs)
+	klog.V(3).Infof("the all cpu ids are: %v, the used CPUs are: %v, the free CPUs are: %v", cpu2NUMA, usedCPUs, freeCPUs)
+	return freeCPUs
+}
+
 func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
 	for _, node := range info.NUMANodes {
 		cpuList := getNumaNodeCpuCap(numaPath, node)
@@ -127,8 +166,13 @@ func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
 	}
 }
 
-func (info *CPUNumaInfo) numaAllocUpdate(cpuMngState string) {
-	freeCPUList := getFreeCPUList(cpuMngState)
+func (info *CPUNumaInfo) numaAllocUpdate(cpuMngState string, enableGetCpuIDByPodResourceList bool) {
+	freeCPUList := make([]int, 0)
+	if enableGetCpuIDByPodResourceList {
+		freeCPUList = GetFreeCPUListByPodResources(info.cpu2NUMA)
+	} else {
+		freeCPUList = getFreeCPUList(cpuMngState)
+	}
 	for _, cpuid := range freeCPUList {
 		numaID := info.cpu2numa(cpuid)
 		info.NUMA2FreeCpus[numaID] = append(info.NUMA2FreeCpus[numaID], cpuid)
@@ -142,7 +186,7 @@ func (info *CPUNumaInfo) Update(opt *args.Argument) NumaInfo {
 	newInfo := NewCPUNumaInfo()
 	newInfo.NUMANodes = getNumaOnline(filepath.Join(cpuNumaBasePath, "online"))
 	newInfo.numaCapUpdate(cpuNumaBasePath)
-	newInfo.numaAllocUpdate(opt.CPUMngState)
+	newInfo.numaAllocUpdate(opt.CPUMngState, opt.EnableGetCpuIDByPodResourceList)
 	newInfo.cpuDetail = newInfo.getAllCPUTopoInfo(opt.DevicePath)
 	if !reflect.DeepEqual(newInfo, info) {
 		return newInfo

@@ -30,6 +30,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/client/clientset/versioned"
+
 	"volcano.sh/resource-exporter/pkg/args"
 	"volcano.sh/resource-exporter/pkg/machineinfo"
 	"volcano.sh/resource-exporter/pkg/numatopo"
@@ -73,6 +74,12 @@ func main() {
 		klog.Errorf("Get numainfo client failed, err = %v", err)
 		return
 	}
+
+	err = numatopo.InitPodResourcesClient(opt.PodResourceSockPath)
+	if err != nil {
+		klog.Errorf("Failed to init podresources client: %v", err)
+	}
+	defer numatopo.ClosePodResourcesClient()
 
 	// Initialize Numatopology informer cache
 	// This uses list-watch mechanism instead of polling

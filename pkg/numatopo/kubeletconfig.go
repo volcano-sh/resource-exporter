@@ -22,7 +22,6 @@ import (
 	"reflect"
 
 	machineinfov1 "github.com/google/cadvisor/info/v1"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
@@ -32,6 +31,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
+
 	"volcano.sh/resource-exporter/pkg/machineinfo"
 	"volcano.sh/resource-exporter/pkg/util"
 )
