@@ -19,9 +19,12 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/spf13/pflag"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
@@ -75,9 +78,16 @@ func main() {
 	// This uses list-watch mechanism instead of polling
 	numaCache := numatopo.NewNumatopoCache(nodeInfoClient, hostname, opt.CheckInterval)
 
-	// Create stop channel for graceful shutdown
-	stopCh := make(chan struct{})
-	defer close(stopCh)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	shutdownCh := make(chan os.Signal, 1)
+	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(shutdownCh)
+	go func() {
+		<-shutdownCh
+		cancel()
+	}()
+	stopCh := ctx.Done()
 
 	// Start the informer (non-blocking, runs in background goroutine)
 	numaCache.Start(stopCh)
@@ -89,10 +99,18 @@ func main() {
 	klog.V(2).Infof("Numatopology informer cache synced successfully")
 
 	// Use wait.UntilWithContext to periodically check and update Numatopology
-	wait.UntilWithContext(context.TODO(), func(ctx context.Context) {
+	wait.UntilWithContext(ctx, func(ctx context.Context) {
 		// Get current resource from informer cache
 		cached, err := numaCache.Get()
-		exist := err == nil && cached != nil
+		exist := true
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				exist = false
+			} else {
+				klog.Errorf("Get Numatopology from cache failed, err=%v", err)
+				return
+			}
+		}
 
 		// Check local file changes (kubelet cpu_manager_state, etc.)
 		isChg := numatopo.NodeInfoRefresh(opt)
