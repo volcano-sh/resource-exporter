@@ -17,8 +17,6 @@ limitations under the License.
 package numatopo
 
 import (
-	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
@@ -41,11 +39,11 @@ type NumatopoCache struct {
 
 // NewNumatopoCache creates a new NumatopoCache with filtered informer.
 // The informer only watches the Numatopology resource for the specified node.
-func NewNumatopoCache(client versioned.Interface, nodeName string, resyncPeriod time.Duration) *NumatopoCache {
+func NewNumatopoCache(client versioned.Interface, nodeName string) *NumatopoCache {
 	// Use FieldSelector to filter, only watch the current node's resource
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		client,
-		resyncPeriod,
+		0,
 		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", nodeName).String()
 		}),

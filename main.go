@@ -76,7 +76,7 @@ func main() {
 
 	// Initialize Numatopology informer cache
 	// This uses list-watch mechanism instead of polling
-	numaCache := numatopo.NewNumatopoCache(nodeInfoClient, hostname, opt.CheckInterval)
+	numaCache := numatopo.NewNumatopoCache(nodeInfoClient, hostname)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
