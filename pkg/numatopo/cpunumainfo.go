@@ -36,6 +36,8 @@ import (
 	"volcano.sh/resource-exporter/pkg/util"
 )
 
+const resourceCPU = "cpu"
+
 // CPUNumaInfo is the object to maintain the cpu information
 type CPUNumaInfo struct {
 	NUMANodes   []int
@@ -43,7 +45,8 @@ type CPUNumaInfo struct {
 	cpu2NUMA    map[int]int
 	cpuDetail   map[int]v1alpha1.CPUInfo
 
-	NUMA2FreeCpus map[int][]int
+	NUMA2FreeCpus  map[int][]int
+	podAllocations []v1alpha1.PodAllocation
 }
 
 // NewCPUNumaInfo init CPUNumaInfo struct object
@@ -58,9 +61,9 @@ func NewCPUNumaInfo() *CPUNumaInfo {
 	return numaInfo
 }
 
-// Name return function name
+// Name return the name of NumaInfo
 func (info *CPUNumaInfo) Name() string {
-	return "cpu"
+	return resourceCPU
 }
 
 func getNumaOnline(onlinePath string) []int {
@@ -100,45 +103,89 @@ func getNumaNodeCpuCap(nodePath string, nodeID int) []int {
 	return cpuList
 }
 
-func getFreeCPUList(cpuMngState string) []int {
+// getFreeCPUListAndPodAllocationsByManagerState returns a list of free (unallocated) CPU IDs and a list of pod cpu allocations by reading the cpu_manager_state file
+func getFreeCPUListAndPodAllocationsByManagerState(cpuMngState string) ([]int, []v1alpha1.PodAllocation) {
 	data, err := ioutil.ReadFile(cpuMngState)
 	if err != nil {
 		klog.Errorf("Read cpu_manager_state failed, err: %v", err)
-		return nil
+		return nil, nil
 	}
 
-	checkpoint := cpustate.NewCPUManagerCheckpoint()
-	checkpoint.UnmarshalCheckpoint(data)
+	var checkpoint cpustate.CPUManagerCheckpoint
+	if err := checkpoint.UnmarshalCheckpoint(data); err != nil {
+		klog.Errorf("Unmarshal cpu_manager_state failed, err: %v", err)
+		return nil, nil
+	}
 
 	cpuList, apiErr := util.Parse(checkpoint.DefaultCPUSet)
 	if apiErr != nil {
-		klog.Errorf("Parse cpu_manager_state failed, err: %v", err)
-		return nil
+		klog.Errorf("Parse cpu_manager_state.defaultCPUSet failed, err: %v", apiErr)
+		return nil, nil
 	}
 
-	return cpuList
+	podAllocations := make([]v1alpha1.PodAllocation, 0, len(checkpoint.Entries))
+	for podUID, containerMap := range checkpoint.Entries {
+		podAlloc := v1alpha1.PodAllocation{UID: podUID}
+		for containerName, allocatedCPUStr := range containerMap {
+			if allocatedCPUStr != "" {
+				podAlloc.ContainerAllocations = append(podAlloc.ContainerAllocations, v1alpha1.ContainerAllocation{
+					Name:        containerName,
+					Allocations: map[string]string{resourceCPU: allocatedCPUStr},
+				})
+			}
+		}
+		if len(podAlloc.ContainerAllocations) > 0 {
+			util.SortContainerAllocations(podAlloc.ContainerAllocations)
+			podAllocations = append(podAllocations, podAlloc)
+		}
+	}
+	util.SortPodAllocations(podAllocations)
+
+	klog.V(2).Infof("Collected %s PodAllocations for %d pods: %v", resourceCPU, len(podAllocations), podAllocations)
+	return cpuList, podAllocations
 }
 
-// GetFreeCPUListByPodResources returns a list of free (unallocated) CPU IDs by calling the PodResources API.
-func GetFreeCPUListByPodResources(cpu2NUMA map[int]int) []int {
+// GetFreeCPUListAndPodAllocationsByPodResources returns a list of free (unallocated) CPU IDs and a list of pod cpu allocations by calling the PodResources API.
+func GetFreeCPUListAndPodAllocationsByPodResources(cpu2NUMA map[int]int) ([]int, []v1alpha1.PodAllocation) {
 	if client == nil {
 		klog.Errorf("PodResourcesListerClient is not initialized")
-		return nil
+		return nil, nil
 	}
 
 	resp, err := client.List(context.Background(), &podresv1.ListPodResourcesRequest{})
 	if err != nil {
 		klog.Errorf("Failed to list pod resources: %v", err)
-		return nil
+		return nil, nil
 	}
 
 	// Collecting IDs of Used CPUs
 	usedCPUs := make(map[int]bool)
+	podAllocations := make([]v1alpha1.PodAllocation, 0, len(resp.PodResources))
 	for _, pod := range resp.PodResources {
+		podAlloc := v1alpha1.PodAllocation{Name: pod.Name, Namespace: pod.Namespace}
+
 		for _, container := range pod.Containers {
+			var allocatedCPUIDs []int
 			for _, cpuID := range container.CpuIds {
-				usedCPUs[int(cpuID)] = true
+				readID := int(cpuID)
+				if _, exist := cpu2NUMA[readID]; exist {
+					usedCPUs[readID] = true
+					allocatedCPUIDs = append(allocatedCPUIDs, readID)
+				}
 			}
+
+			allocatedCPUStr := util.FormatCPUs(allocatedCPUIDs)
+			if allocatedCPUStr != "" {
+				podAlloc.ContainerAllocations = append(podAlloc.ContainerAllocations, v1alpha1.ContainerAllocation{
+					Name:        container.Name,
+					Allocations: map[string]string{resourceCPU: allocatedCPUStr},
+				})
+			}
+		}
+
+		if len(podAlloc.ContainerAllocations) > 0 {
+			util.SortContainerAllocations(podAlloc.ContainerAllocations)
+			podAllocations = append(podAllocations, podAlloc)
 		}
 	}
 
@@ -151,8 +198,11 @@ func GetFreeCPUListByPodResources(cpu2NUMA map[int]int) []int {
 	}
 
 	sort.Ints(freeCPUs)
-	klog.V(3).Infof("the all cpu ids are: %v, the used CPUs are: %v, the free CPUs are: %v", cpu2NUMA, usedCPUs, freeCPUs)
-	return freeCPUs
+	util.SortPodAllocations(podAllocations)
+
+	klog.V(2).Infof("the all cpu ids are: %v, the used CPUs are: %v, the free CPUs are: %v", cpu2NUMA, usedCPUs, freeCPUs)
+	klog.V(2).Infof("Collected %s PodAllocations for %d pods: %v", resourceCPU, len(podAllocations), podAllocations)
+	return freeCPUs, podAllocations
 }
 
 func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
@@ -169,9 +219,9 @@ func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
 func (info *CPUNumaInfo) numaAllocUpdate(cpuMngState string, enableGetCpuIDByPodResourceList bool) {
 	freeCPUList := make([]int, 0)
 	if enableGetCpuIDByPodResourceList {
-		freeCPUList = GetFreeCPUListByPodResources(info.cpu2NUMA)
+		freeCPUList, info.podAllocations = GetFreeCPUListAndPodAllocationsByPodResources(info.cpu2NUMA)
 	} else {
-		freeCPUList = getFreeCPUList(cpuMngState)
+		freeCPUList, info.podAllocations = getFreeCPUListAndPodAllocationsByManagerState(cpuMngState)
 	}
 	for _, cpuid := range freeCPUList {
 		numaID := info.cpu2numa(cpuid)
@@ -274,4 +324,9 @@ func (info *CPUNumaInfo) GetResTopoDetail() interface{} {
 	}
 
 	return allCPUTopoInfo
+}
+
+// GetPodAllocations returns the pod allocation info
+func (info *CPUNumaInfo) GetPodAllocations() []v1alpha1.PodAllocation {
+	return info.podAllocations
 }

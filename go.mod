@@ -18,7 +18,7 @@ require (
 	k8s.io/kubernetes v1.35.3
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/yaml v1.6.0
-	volcano.sh/apis v1.15.0
+	volcano.sh/apis v1.15.1-0.20260622062552-536f121f5365
 )
 
 require (

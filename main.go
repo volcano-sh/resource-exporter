@@ -112,11 +112,11 @@ func main() {
 			}
 		}
 
-		// Check local file changes (kubelet cpu_manager_state, etc.)
+		// Check local resource changes, including kubelet config, node numa topologies and pod resource allocations
 		isChg := numatopo.NodeInfoRefresh(opt)
-		klog.V(4).Infof("Local file changes within the interval: %v", isChg)
+		klog.V(4).Infof("Local resource changes within the interval: %v", isChg)
 
-		// Create or update if there are changes or resource doesn't exist
+		// Create or update if there are changes or resources non-existent
 		if isChg || !exist {
 			klog.V(4).Infof("Node info changes detected, updating Numatopology.")
 			numatopo.CreateOrUpdateNumatopo(nodeInfoClient, cached)

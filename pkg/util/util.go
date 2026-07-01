@@ -18,11 +18,14 @@ package util
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 )
 
 // Parse string, such as "1,2-7,9,10-13,14"
@@ -96,4 +99,56 @@ func ParseResourceList(m map[string]string) (v1.ResourceList, error) {
 		}
 	}
 	return rl, nil
+}
+
+func SortPodAllocations(pas []v1alpha1.PodAllocation) {
+	sort.Slice(pas, func(i, j int) bool {
+		if pas[i].UID != pas[j].UID {
+			return pas[i].UID < pas[j].UID
+		}
+		if pas[i].Namespace != pas[j].Namespace {
+			return pas[i].Namespace < pas[j].Namespace
+		}
+		return pas[i].Name < pas[j].Name
+	})
+}
+
+func SortContainerAllocations(cas []v1alpha1.ContainerAllocation) {
+	sort.Slice(cas, func(i, j int) bool {
+		return cas[i].Name < cas[j].Name
+	})
+}
+
+// FormatCPUs converts a list of CPU IDs to a compact range string like "0-3,5,7-9".
+func FormatCPUs(cpus []int) string {
+	if len(cpus) == 0 {
+		return ""
+	}
+
+	sort.Ints(cpus)
+
+	var parts []string
+	start := cpus[0]
+	prev := cpus[0]
+
+	for i := 1; i < len(cpus); i++ {
+		if cpus[i] == prev+1 {
+			prev = cpus[i]
+			continue
+		}
+		parts = append(parts, formatRange(start, prev))
+		start = cpus[i]
+		prev = cpus[i]
+	}
+	parts = append(parts, formatRange(start, prev))
+
+	return strings.Join(parts, ",")
+}
+
+// formatRange formats a range of CPU IDs.
+func formatRange(start, end int) string {
+	if start == end {
+		return strconv.Itoa(start)
+	}
+	return fmt.Sprintf("%d-%d", start, end)
 }

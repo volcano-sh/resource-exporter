@@ -73,6 +73,20 @@ func GetCpusDetail() map[string]v1alpha1.CPUInfo {
 	return nil
 }
 
+// GetPodAllocations returns the pod resource allocation info
+func GetPodAllocations() []v1alpha1.PodAllocation {
+	var podAllocations []v1alpha1.PodAllocation
+
+	for _, info := range numaMap {
+		pas := info.GetPodAllocations()
+		if len(pas) > 0 {
+			podAllocations = append(podAllocations, pas...)
+		}
+	}
+
+	return podAllocations
+}
+
 func init() {
 	RegisterNumaType(NewCPUNumaInfo())
 }
