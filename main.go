@@ -18,17 +18,16 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/spf13/pflag"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cliflag "k8s.io/component-base/cli/flag"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/client/clientset/versioned"
 	"volcano.sh/resource-exporter/pkg/args"
@@ -47,24 +46,6 @@ func getNumaTopoClient(argument *args.Argument) (*versioned.Clientset, error) {
 	return versioned.NewForConfigOrDie(config), err
 }
 
-func numatopoIsExist(client *versioned.Clientset) (bool, error) {
-	hostname := os.Getenv("MY_NODE_NAME")
-	if hostname == "" {
-		return false, fmt.Errorf("get Hostname failed")
-	}
-
-	_, err := client.NodeinfoV1alpha1().Numatopologies().Get(context.TODO(), hostname, metav1.GetOptions{})
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return false, err
-		}
-
-		return false, nil
-	}
-
-	return true, nil
-}
-
 func main() {
 	klog.InitFlags(nil)
 
@@ -81,27 +62,57 @@ func main() {
 		klog.Fatal(err)
 	}
 
+	// Get hostname from environment variable
+	hostname := os.Getenv("MY_NODE_NAME")
+	if hostname == "" {
+		klog.Fatal("MY_NODE_NAME environment variable is required")
+	}
+
 	nodeInfoClient, err := getNumaTopoClient(opt)
 	if err != nil {
 		klog.Errorf("Get numainfo client failed, err = %v", err)
 		return
 	}
 
-	tick := time.NewTicker(opt.CheckInterval)
-	for {
-		select {
-		case <-tick.C:
-			exist, err := numatopoIsExist(nodeInfoClient)
-			if err != nil {
-				klog.Errorf("Get numatopo failed, err= %v", err)
-				continue
-			}
+	// Initialize Numatopology informer cache
+	// This uses list-watch mechanism instead of polling
+	numaCache := numatopo.NewNumatopoCache(nodeInfoClient, hostname)
 
-			isChg := numatopo.NodeInfoRefresh(opt)
-			if isChg || !exist {
-				klog.V(4).Infof("Node info changes.")
-				numatopo.CreateOrUpdateNumatopo(nodeInfoClient)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	stopCh := ctx.Done()
+
+	// Start the informer (non-blocking, runs in background goroutine)
+	numaCache.Start(stopCh)
+
+	// Wait for informer cache to sync (blocking until initial list is complete)
+	if !numaCache.WaitForCacheSync(stopCh) {
+		klog.Fatal("Failed to sync Numatopology informer cache")
+	}
+	klog.V(2).Infof("Numatopology informer cache synced successfully")
+
+	// Use wait.UntilWithContext to periodically check and update Numatopology
+	wait.UntilWithContext(ctx, func(ctx context.Context) {
+		// Get current resource from informer cache
+		cached, err := numaCache.Get()
+		exist := true
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				exist = false
+			} else {
+				klog.Errorf("Get Numatopology from cache failed, err=%v", err)
+				return
 			}
 		}
-	}
+
+		// Check local file changes (kubelet cpu_manager_state, etc.)
+		isChg := numatopo.NodeInfoRefresh(opt)
+		klog.V(4).Infof("Local file changes within the interval: %v", isChg)
+
+		// Create or update if there are changes or resource doesn't exist
+		if isChg || !exist {
+			klog.V(4).Infof("Node info changes detected, updating Numatopology.")
+			numatopo.CreateOrUpdateNumatopo(nodeInfoClient, cached)
+		}
+	}, opt.CheckInterval)
 }

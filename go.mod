@@ -15,6 +15,7 @@ require (
 	k8s.io/client-go v0.19.6
 	k8s.io/component-base v0.19.6
 	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.2.0
 	k8s.io/kubelet v0.19.6
 	k8s.io/kubernetes v1.19.6
 	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009 // indirect
