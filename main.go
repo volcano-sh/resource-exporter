@@ -78,15 +78,8 @@ func main() {
 	// This uses list-watch mechanism instead of polling
 	numaCache := numatopo.NewNumatopoCache(nodeInfoClient, hostname)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	shutdownCh := make(chan os.Signal, 1)
-	signal.Notify(shutdownCh, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(shutdownCh)
-	go func() {
-		<-shutdownCh
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 	stopCh := ctx.Done()
 
 	// Start the informer (non-blocking, runs in background goroutine)
