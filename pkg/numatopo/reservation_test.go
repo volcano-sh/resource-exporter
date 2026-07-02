@@ -17,14 +17,19 @@ limitations under the License.
 package numatopo
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
 
 	machineinfov1 "github.com/google/cadvisor/info/v1"
+	nodeinfov1alpha1 "volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
+	"volcano.sh/apis/pkg/client/clientset/versioned/fake"
 )
 
 const (
@@ -98,5 +103,45 @@ func TestReservationCalculation(t *testing.T) {
 				t.Errorf("expect: %v, got: %v", pq, reservation[metric])
 			}
 		}
+	}
+}
+
+func TestCreateOrUpdateNumatopoUpdatesExistingResourceWhenCreateAlreadyExists(t *testing.T) {
+	const nodeName = "node-a"
+
+	oldNodeName, hadNodeName := os.LookupEnv("MY_NODE_NAME")
+	if err := os.Setenv("MY_NODE_NAME", nodeName); err != nil {
+		t.Fatalf("failed to set MY_NODE_NAME: %v", err)
+	}
+	defer func() {
+		if hadNodeName {
+			_ = os.Setenv("MY_NODE_NAME", oldNodeName)
+		} else {
+			_ = os.Unsetenv("MY_NODE_NAME")
+		}
+	}()
+
+	client := fake.NewSimpleClientset(&nodeinfov1alpha1.Numatopology{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nodeName,
+		},
+		Spec: nodeinfov1alpha1.NumatopoSpec{
+			Policies: map[nodeinfov1alpha1.PolicyName]string{
+				nodeinfov1alpha1.CPUManagerPolicy: "stale",
+			},
+		},
+	})
+
+	CreateOrUpdateNumatopo(client, nil)
+
+	updated, err := client.NodeinfoV1alpha1().Numatopologies().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to get updated Numatopology: %v", err)
+	}
+	if updated.Annotations["timestamp"] == "" {
+		t.Fatalf("expected timestamp annotation to be set after update")
+	}
+	if updated.Spec.Policies[nodeinfov1alpha1.CPUManagerPolicy] == "stale" {
+		t.Fatalf("expected existing Numatopology spec to be updated")
 	}
 }

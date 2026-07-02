@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
@@ -53,7 +54,7 @@ func NodeInfoRefresh(opt *args.Argument) bool {
 // The cached parameter is the Numatopology resource from the informer cache.
 // If cached is nil, a new resource will be created.
 // If cached is not nil, the resource will be updated.
-func CreateOrUpdateNumatopo(client *versioned.Clientset, cached *v1alpha1.Numatopology) {
+func CreateOrUpdateNumatopo(client versioned.Interface, cached *v1alpha1.Numatopology) {
 	hostname := os.Getenv("MY_NODE_NAME")
 	if hostname == "" {
 		klog.Errorf("Get env MY_NODE_NAME failed.")
@@ -76,30 +77,41 @@ func CreateOrUpdateNumatopo(client *versioned.Clientset, cached *v1alpha1.Numato
 
 		_, err := client.NodeinfoV1alpha1().Numatopologies().Create(context.TODO(), numaInfo, metav1.CreateOptions{})
 		if err != nil {
-			klog.Errorf("Create Numatopo for node %s failed, err=%v", hostname, err)
-		} else {
-			klog.V(4).Infof("Created Numatopo for node %s successfully", hostname)
-		}
-	} else {
-		// Resource exists in cache, update it
-		numaInfo := cached.DeepCopy()
-		numaInfo.Spec = v1alpha1.NumatopoSpec{
-			Policies:    GetPolicy(),
-			ResReserved: GetResReserved(),
-			NumaResMap:  GetAllResAllocatableInfo(),
-			CPUDetail:   GetCpusDetail(),
-		}
-		if numaInfo.Annotations == nil {
-			numaInfo.Annotations = make(map[string]string)
-		}
-		// use to trigger CR numa update
-		numaInfo.Annotations["timestamp"] = fmt.Sprint(time.Now().Unix())
+			if !apierrors.IsAlreadyExists(err) {
+				klog.Errorf("Create Numatopo for node %s failed, err=%v", hostname, err)
+				return
+			}
 
-		_, err := client.NodeinfoV1alpha1().Numatopologies().Update(context.TODO(), numaInfo, metav1.UpdateOptions{})
-		if err != nil {
-			klog.Errorf("Update Numatopo for node %s failed, err=%v", hostname, err)
+			cached, err = client.NodeinfoV1alpha1().Numatopologies().Get(context.TODO(), hostname, metav1.GetOptions{})
+			if err != nil {
+				klog.Errorf("Get existing Numatopo for node %s failed, err=%v", hostname, err)
+				return
+			}
 		} else {
-			klog.V(4).Infof("Updated Numatopo for node %s successfully", hostname)
+			// Create succeeded, no immediate update is needed.
+			klog.V(4).Infof("Created Numatopo for node %s successfully", hostname)
+			return
 		}
+	}
+
+	// Resource exists in cache, update it
+	numaInfo := cached.DeepCopy()
+	numaInfo.Spec = v1alpha1.NumatopoSpec{
+		Policies:    GetPolicy(),
+		ResReserved: GetResReserved(),
+		NumaResMap:  GetAllResAllocatableInfo(),
+		CPUDetail:   GetCpusDetail(),
+	}
+	if numaInfo.Annotations == nil {
+		numaInfo.Annotations = make(map[string]string)
+	}
+	// use to trigger CR numa update
+	numaInfo.Annotations["timestamp"] = fmt.Sprint(time.Now().Unix())
+
+	_, err := client.NodeinfoV1alpha1().Numatopologies().Update(context.TODO(), numaInfo, metav1.UpdateOptions{})
+	if err != nil {
+		klog.Errorf("Update Numatopo for node %s failed, err=%v", hostname, err)
+	} else {
+		klog.V(4).Infof("Updated Numatopo for node %s successfully", hostname)
 	}
 }
