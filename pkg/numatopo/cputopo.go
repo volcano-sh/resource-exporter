@@ -23,9 +23,9 @@ import (
 	"reflect"
 	"strconv"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	cpustate "k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
-	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
+	"k8s.io/utils/cpuset"
 
 	"volcano.sh/apis/pkg/apis/nodeinfo/v1alpha1"
 
@@ -203,11 +203,11 @@ func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int
 
 // GetResourceInfoMap return the cpu topology info
 func (info *CPUNumaInfo) GetResourceInfoMap() v1alpha1.ResourceInfo {
-	sets := cpuset.NewCPUSet()
+	sets := cpuset.New()
 	var cap = 0
 
 	for _, freeCpus := range info.NUMA2FreeCpus {
-		tmp := cpuset.NewCPUSet(freeCpus...)
+		tmp := cpuset.New(freeCpus...)
 		sets = sets.Union(tmp)
 	}
 
