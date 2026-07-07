@@ -75,11 +75,20 @@ func main() {
 		return
 	}
 
-	err = numatopo.InitPodResourcesClient(opt.PodResourceSockPath)
-	if err != nil {
-		klog.Errorf("Failed to init podresources client: %v", err)
+	if opt.EnableGetCpuIDByPodResourceList {
+		err = numatopo.InitPodResourcesClient(opt.PodResourceSockPath)
+		if err != nil {
+			// Fall back to the cpu_manager_state file-based method instead of
+			// leaving the client nil: a nil client would make every NUMA
+			// allocation update fail, so the node topology would silently stop
+			// being reported. Degrading keeps the daemon reporting, just via the
+			// legacy (less reliable) source.
+			klog.Errorf("Failed to init podresources client, falling back to cpu_manager_state method: %v", err)
+			opt.EnableGetCpuIDByPodResourceList = false
+		} else {
+			defer numatopo.ClosePodResourcesClient()
+		}
 	}
-	defer numatopo.ClosePodResourcesClient()
 
 	// Initialize Numatopology informer cache
 	// This uses list-watch mechanism instead of polling

@@ -51,7 +51,7 @@ func (args *Argument) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&args.KubeClientOptions.Master, "master", args.KubeClientOptions.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
 	fs.StringVar(&args.KubeClientOptions.KubeConfig, "kubeconfig", args.KubeClientOptions.KubeConfig, "Path to kubeconfig file with authorization and master location information.")
 
-	fs.StringVar(&args.PodResourceSockPath, "pod-resource-sock", args.PodResourceSockPath, "Path to pod-resource-sock")
+	fs.StringVar(&args.PodResourceSockPath, "pod-resource-sock", "/var/lib/kubelet/pod-resources", "Path to pod-resource-sock")
 	fs.BoolVar(&args.EnableGetCpuIDByPodResourceList, "enable-pod-resource", true, "Enable get cpu id by PodResourcesLister; it is true by default")
 }
 

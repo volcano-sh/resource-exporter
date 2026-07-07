@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"time"
 
 	"k8s.io/klog/v2"
 	podresv1 "k8s.io/kubelet/pkg/apis/podresources/v1"
@@ -104,23 +105,20 @@ func getNumaNodeCpuCap(nodePath string, nodeID int) []int {
 }
 
 // getFreeCPUListAndPodAllocationsByManagerState returns a list of free (unallocated) CPU IDs and a list of pod cpu allocations by reading the cpu_manager_state file
-func getFreeCPUListAndPodAllocationsByManagerState(cpuMngState string) ([]int, []v1alpha1.PodAllocation) {
+func getFreeCPUListAndPodAllocationsByManagerState(cpuMngState string) ([]int, []v1alpha1.PodAllocation, error) {
 	data, err := ioutil.ReadFile(cpuMngState)
 	if err != nil {
-		klog.Errorf("Read cpu_manager_state failed, err: %v", err)
-		return nil, nil
+		return nil, nil, fmt.Errorf("read cpu_manager_state failed, err: %w", err)
 	}
 
 	var checkpoint cpustate.CPUManagerCheckpoint
 	if err := checkpoint.UnmarshalCheckpoint(data); err != nil {
-		klog.Errorf("Unmarshal cpu_manager_state failed, err: %v", err)
-		return nil, nil
+		return nil, nil, fmt.Errorf("unmarshal cpu_manager_state failed, err: %w", err)
 	}
 
 	cpuList, apiErr := util.Parse(checkpoint.DefaultCPUSet)
 	if apiErr != nil {
-		klog.Errorf("Parse cpu_manager_state.defaultCPUSet failed, err: %v", apiErr)
-		return nil, nil
+		return nil, nil, fmt.Errorf("parse cpu_manager_state.defaultCPUSet failed, err: %w", apiErr)
 	}
 
 	podAllocations := make([]v1alpha1.PodAllocation, 0, len(checkpoint.Entries))
@@ -142,29 +140,40 @@ func getFreeCPUListAndPodAllocationsByManagerState(cpuMngState string) ([]int, [
 	util.SortPodAllocations(podAllocations)
 
 	klog.V(2).Infof("Collected %s PodAllocations for %d pods: %v", resourceCPU, len(podAllocations), podAllocations)
-	return cpuList, podAllocations
+	return cpuList, podAllocations, nil
 }
 
 // GetFreeCPUListAndPodAllocationsByPodResources returns a list of free (unallocated) CPU IDs and a list of pod cpu allocations by calling the PodResources API.
-func GetFreeCPUListAndPodAllocationsByPodResources(cpu2NUMA map[int]int) ([]int, []v1alpha1.PodAllocation) {
+func GetFreeCPUListAndPodAllocationsByPodResources(cpu2NUMA map[int]int) ([]int, []v1alpha1.PodAllocation, error) {
 	if client == nil {
-		klog.Errorf("PodResourcesListerClient is not initialized")
-		return nil, nil
+		return nil, nil, fmt.Errorf("PodResourcesListerClient is not initialized")
 	}
 
-	resp, err := client.List(context.Background(), &podresv1.ListPodResourcesRequest{})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := client.List(ctx, &podresv1.ListPodResourcesRequest{})
 	if err != nil {
-		klog.Errorf("Failed to list pod resources: %v", err)
-		return nil, nil
+		return nil, nil, fmt.Errorf("failed to list pod resources, err: %w", err)
+	}
+
+	if resp == nil {
+		return nil, nil, fmt.Errorf("received nil response from PodResourcesListerClient")
 	}
 
 	// Collecting IDs of Used CPUs
 	usedCPUs := make(map[int]bool)
 	podAllocations := make([]v1alpha1.PodAllocation, 0, len(resp.PodResources))
 	for _, pod := range resp.PodResources {
+		if pod == nil {
+			continue
+		}
 		podAlloc := v1alpha1.PodAllocation{Name: pod.Name, Namespace: pod.Namespace}
 
 		for _, container := range pod.Containers {
+			if container == nil {
+				continue
+			}
 			var allocatedCPUIDs []int
 			for _, cpuID := range container.CpuIds {
 				readID := int(cpuID)
@@ -202,7 +211,7 @@ func GetFreeCPUListAndPodAllocationsByPodResources(cpu2NUMA map[int]int) ([]int,
 
 	klog.V(2).Infof("the all cpu ids are: %v, the used CPUs are: %v, the free CPUs are: %v", cpu2NUMA, usedCPUs, freeCPUs)
 	klog.V(2).Infof("Collected %s PodAllocations for %d pods: %v", resourceCPU, len(podAllocations), podAllocations)
-	return freeCPUs, podAllocations
+	return freeCPUs, podAllocations, nil
 }
 
 func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
@@ -216,17 +225,27 @@ func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
 	}
 }
 
-func (info *CPUNumaInfo) numaAllocUpdate(cpuMngState string, enableGetCpuIDByPodResourceList bool) {
+func (info *CPUNumaInfo) numaAllocUpdate(cpuMngState string, enableGetCpuIDByPodResourceList bool) error {
 	freeCPUList := make([]int, 0)
+	var err error
 	if enableGetCpuIDByPodResourceList {
-		freeCPUList, info.podAllocations = GetFreeCPUListAndPodAllocationsByPodResources(info.cpu2NUMA)
+		freeCPUList, info.podAllocations, err = GetFreeCPUListAndPodAllocationsByPodResources(info.cpu2NUMA)
 	} else {
-		freeCPUList, info.podAllocations = getFreeCPUListAndPodAllocationsByManagerState(cpuMngState)
+		freeCPUList, info.podAllocations, err = getFreeCPUListAndPodAllocationsByManagerState(cpuMngState)
 	}
+	if err != nil {
+		// Preserve the previous valid state by aborting the update on failure;
+		// otherwise an empty free CPU list would overwrite the allocatable CPUs
+		// in the custom resource.
+		return err
+	}
+
 	for _, cpuid := range freeCPUList {
 		numaID := info.cpu2numa(cpuid)
 		info.NUMA2FreeCpus[numaID] = append(info.NUMA2FreeCpus[numaID], cpuid)
 	}
+
+	return nil
 }
 
 // Update returns the latest cpu numa info
@@ -236,7 +255,10 @@ func (info *CPUNumaInfo) Update(opt *args.Argument) NumaInfo {
 	newInfo := NewCPUNumaInfo()
 	newInfo.NUMANodes = getNumaOnline(filepath.Join(cpuNumaBasePath, "online"))
 	newInfo.numaCapUpdate(cpuNumaBasePath)
-	newInfo.numaAllocUpdate(opt.CPUMngState, opt.EnableGetCpuIDByPodResourceList)
+	if err := newInfo.numaAllocUpdate(opt.CPUMngState, opt.EnableGetCpuIDByPodResourceList); err != nil {
+		klog.Errorf("Failed to update NUMA allocation: %v", err)
+		return nil
+	}
 	newInfo.cpuDetail = newInfo.getAllCPUTopoInfo(opt.DevicePath)
 	if !reflect.DeepEqual(newInfo, info) {
 		return newInfo
