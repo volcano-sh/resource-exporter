@@ -304,12 +304,12 @@ func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int
 	socketPath := filepath.Join(topoPath, "physical_package_id")
 	data, err = ioutil.ReadFile(socketPath)
 	if err != nil {
-		return 0, 0, fmt.Errorf("cpu %d read scoket_id file failed", cpuID)
+		return 0, 0, fmt.Errorf("cpu %d read socket_id file failed", cpuID)
 	}
 
 	tmpData, apiErr = util.Parse(string(data))
 	if apiErr != nil {
-		return 0, 0, fmt.Errorf("cpu %d scoket_id parse failed", cpuID)
+		return 0, 0, fmt.Errorf("cpu %d socket_id parse failed", cpuID)
 	}
 
 	socketID = tmpData[0]
@@ -320,7 +320,7 @@ func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int
 // GetResourceInfoMap return the cpu topology info
 func (info *CPUNumaInfo) GetResourceInfoMap() v1alpha1.ResourceInfo {
 	sets := cpuset.New()
-	var cap = 0
+	var capacity = 0
 
 	for _, freeCpus := range info.NUMA2FreeCpus {
 		tmp := cpuset.New(freeCpus...)
@@ -328,12 +328,12 @@ func (info *CPUNumaInfo) GetResourceInfoMap() v1alpha1.ResourceInfo {
 	}
 
 	for numaID := range info.NUMA2CpuCap {
-		cap += info.NUMA2CpuCap[numaID]
+		capacity += info.NUMA2CpuCap[numaID]
 	}
 
 	return v1alpha1.ResourceInfo{
 		Allocatable: sets.String(),
-		Capacity:    cap,
+		Capacity:    capacity,
 	}
 }
 
