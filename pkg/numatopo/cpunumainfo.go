@@ -298,6 +298,9 @@ func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int
 	if apiErr != nil {
 		return 0, 0, fmt.Errorf("cpu %d core_id parse failed", cpuID)
 	}
+	if len(tmpData) == 0 {
+		return 0, 0, fmt.Errorf("cpu %d core_id is empty", cpuID)
+	}
 
 	coreID = tmpData[0]
 
@@ -310,6 +313,9 @@ func getCoreIDSocketIDForCpu(devicePath string, cpuID int) (coreID, socketID int
 	tmpData, apiErr = util.Parse(string(data))
 	if apiErr != nil {
 		return 0, 0, fmt.Errorf("cpu %d socket_id parse failed", cpuID)
+	}
+	if len(tmpData) == 0 {
+		return 0, 0, fmt.Errorf("cpu %d socket_id is empty", cpuID)
 	}
 
 	socketID = tmpData[0]
