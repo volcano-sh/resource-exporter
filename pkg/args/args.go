@@ -22,12 +22,13 @@ type ClientOptions struct {
 
 // Argument is the object to save config set
 type Argument struct {
-	CheckInterval     time.Duration
-	KubeletConf       string
-	DevicePath        string
-	CPUMngState       string
-	ResReserved       map[string]string
-	KubeClientOptions ClientOptions
+	CheckInterval          time.Duration
+	KubeletConf            string
+	DevicePath             string
+	CPUMngState            string
+	DevicePluginCheckpoint string
+	ResReserved            map[string]string
+	KubeClientOptions      ClientOptions
 }
 
 // NewArgument init the struct
@@ -43,6 +44,7 @@ func (args *Argument) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&args.KubeletConf, "kubelet-conf", args.KubeletConf, "Path to kubelet configure file")
 	fs.StringVar(&args.DevicePath, "device-path", args.DevicePath, "Path to device information")
 	fs.StringVar(&args.CPUMngState, "cpu-manager-state", args.CPUMngState, "Path to cpu_manager_state")
+	fs.StringVar(&args.DevicePluginCheckpoint, "device-plugin-checkpoint", args.DevicePluginCheckpoint, "Path to kubelet_internal_checkpoint")
 	fs.Var(cliflag.NewMapStringString(&args.ResReserved), "res-reserved", "kubelet reserved resource  (e.g. cpu=200m,memory=500Mi")
 
 	fs.StringVar(&args.KubeClientOptions.Master, "master", args.KubeClientOptions.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
