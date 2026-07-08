@@ -162,4 +162,6 @@ replace (
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.35.3
 	k8s.io/sample-controller => k8s.io/sample-controller v0.35.3
 	vbom.ml/util => github.com/fvbommel/sortorder v1.0.1
+	// TODO: Remove this replace once volcano-sh/apis#229 is merged
+	volcano.sh/apis => github.com/pmady/apis v0.0.0-20260331174104-fb9ee171f370
 )

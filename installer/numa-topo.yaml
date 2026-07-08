@@ -62,6 +62,7 @@ spec:
             - --logtostderr
             - --kubelet-conf=/host/kubeletconf/config.yaml
             - --cpu-manager-state=/host/kubelet/cpu_manager_state
+            - --device-plugin-checkpoint=/host/kubelet/device-plugins/kubelet_internal_checkpoint
             - --device-path=/host/device
             - -v=4
             - 2>&1
