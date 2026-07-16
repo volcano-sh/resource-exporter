@@ -6,6 +6,7 @@ require (
 	github.com/google/cadvisor v0.53.0
 	github.com/spf13/pflag v1.0.9
 	golang.org/x/time v0.11.0 // indirect
+	google.golang.org/grpc v1.72.2
 	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.3
@@ -17,7 +18,7 @@ require (
 	k8s.io/kubernetes v1.35.3
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/yaml v1.6.0
-	volcano.sh/apis v1.15.0
+	volcano.sh/apis v1.15.1-0.20260622062552-536f121f5365
 )
 
 require (
@@ -108,7 +109,6 @@ require (
 	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250303144028-a0af3efb3deb // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250528174236-200df99c418a // indirect
-	google.golang.org/grpc v1.72.2 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

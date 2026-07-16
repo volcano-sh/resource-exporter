@@ -30,6 +30,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"volcano.sh/apis/pkg/client/clientset/versioned"
+
 	"volcano.sh/resource-exporter/pkg/args"
 	"volcano.sh/resource-exporter/pkg/machineinfo"
 	"volcano.sh/resource-exporter/pkg/numatopo"
@@ -74,6 +75,21 @@ func main() {
 		return
 	}
 
+	if opt.EnableGetCpuIDByPodResourceList {
+		err = numatopo.InitPodResourcesClient(opt.PodResourceSockPath)
+		if err != nil {
+			// Fall back to the cpu_manager_state file-based method instead of
+			// leaving the client nil: a nil client would make every NUMA
+			// allocation update fail, so the node topology would silently stop
+			// being reported. Degrading keeps the daemon reporting, just via the
+			// legacy (less reliable) source.
+			klog.Errorf("Failed to init podresources client, falling back to cpu_manager_state method: %v", err)
+			opt.EnableGetCpuIDByPodResourceList = false
+		} else {
+			defer numatopo.ClosePodResourcesClient()
+		}
+	}
+
 	// Initialize Numatopology informer cache
 	// This uses list-watch mechanism instead of polling
 	numaCache := numatopo.NewNumatopoCache(nodeInfoClient, hostname)
@@ -105,11 +121,11 @@ func main() {
 			}
 		}
 
-		// Check local file changes (kubelet cpu_manager_state, etc.)
+		// Check local resource changes, including kubelet config, node numa topologies and pod resource allocations
 		isChg := numatopo.NodeInfoRefresh(opt)
-		klog.V(4).Infof("Local file changes within the interval: %v", isChg)
+		klog.V(4).Infof("Local resource changes within the interval: %v", isChg)
 
-		// Create or update if there are changes or resource doesn't exist
+		// Create or update if there are changes or resources non-existent
 		if isChg || !exist {
 			klog.V(4).Infof("Node info changes detected, updating Numatopology.")
 			numatopo.CreateOrUpdateNumatopo(nodeInfoClient, cached)

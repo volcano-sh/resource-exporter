@@ -63,6 +63,8 @@ spec:
             - --kubelet-conf=/host/kubeletconf/config.yaml
             - --cpu-manager-state=/host/kubelet/cpu_manager_state
             - --device-path=/host/device
+            - --pod-resource-sock=/host/podresources
+            - --enable-pod-resource=true
             - -v=4
             - 2>&1
           env:
@@ -77,6 +79,9 @@ spec:
               mountPath: "/host/kubelet"
             - name: kubelet-config-path
               mountPath: "/host/kubeletconf"
+            - name: pod-resources-sock
+              mountPath: "/host/podresources"
+              readOnly: true
       volumes:
         - name: node-path
           hostPath:
@@ -87,3 +92,6 @@ spec:
         - name: kubelet-config-path
           hostPath:
             path: "/var/lib/kubelet"
+        - name: pod-resources-sock
+          hostPath:
+            path: /var/lib/kubelet/pod-resources

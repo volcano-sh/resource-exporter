@@ -22,10 +22,11 @@ import (
 	"volcano.sh/resource-exporter/pkg/args"
 )
 
-// NumaInfo is the interface of resource topology data
+// NumaInfo is the interface of numa resource topology and per-pod/container allocation data
 type NumaInfo interface {
 	Name() string
 	Update(opt *args.Argument) NumaInfo
 	GetResourceInfoMap() v1alpha1.ResourceInfo
 	GetResTopoDetail() interface{}
+	GetPodAllocations() []v1alpha1.PodAllocation
 }

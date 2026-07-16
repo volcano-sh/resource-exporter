@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -22,12 +21,16 @@ type ClientOptions struct {
 
 // Argument is the object to save config set
 type Argument struct {
-	CheckInterval     time.Duration
-	KubeletConf       string
-	DevicePath        string
-	CPUMngState       string
-	ResReserved       map[string]string
-	KubeClientOptions ClientOptions
+	CheckInterval       time.Duration
+	KubeletConf         string
+	DevicePath          string
+	PodResourceSockPath string
+	CPUMngState         string
+	ResReserved         map[string]string
+	KubeClientOptions   ClientOptions
+
+	// EnableGetCpuIDByPodResourceList enable get cpu id by PodResourcesLister API
+	EnableGetCpuIDByPodResourceList bool
 }
 
 // NewArgument init the struct
@@ -47,6 +50,9 @@ func (args *Argument) AddFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&args.KubeClientOptions.Master, "master", args.KubeClientOptions.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
 	fs.StringVar(&args.KubeClientOptions.KubeConfig, "kubeconfig", args.KubeClientOptions.KubeConfig, "Path to kubeconfig file with authorization and master location information.")
+
+	fs.StringVar(&args.PodResourceSockPath, "pod-resource-sock", "/var/lib/kubelet/pod-resources", "Path to pod-resource-sock")
+	fs.BoolVar(&args.EnableGetCpuIDByPodResourceList, "enable-pod-resource", true, "Enable get cpu id by PodResourcesLister; it is true by default")
 }
 
 // BuildConfig builds kube rest config with the given options.
