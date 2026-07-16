@@ -1,4 +1,5 @@
 reviewers:
+  - JesseStutler
   - k82cn
   - kevin-wangzefeng
   - animeshsingh
@@ -14,6 +15,7 @@ reviewers:
   - qiankunli
   - hwdef
 approvers:
+  - JesseStutler
   - k82cn
   - kevin-wangzefeng
   - animeshsingh
