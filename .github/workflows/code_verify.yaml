@@ -1,0 +1,41 @@
+name: Code Verify
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+  pull_request:
+
+permissions: read-all
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    name: Verify codes and run unit tests
+    timeout-minutes: 30
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.25.x
+          cache-dependency-path: go.sum
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run verify (fmt, vet, lint)
+        run: make verify
+
+      - name: Build numatopo
+        run: make build
+
+      - name: Run unit tests
+        run: make unit-test

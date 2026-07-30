@@ -1,0 +1,93 @@
+name: daily release
+
+on:
+  schedule:
+    # Runs at 0:00 and 12:00 UTC every day to publish a rolling `latest` image
+    - cron: '0 */12 * * *'
+  # Automatically push the image when releasing a version
+  push:
+    tags:
+      - "v*.*.*"
+  # Allow manually triggering the workflow for debugging
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  docker:
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.x
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine image tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+            echo "RELEASE_VER=${{ github.ref_name }}" >> $GITHUB_ENV
+          else
+            echo "TAG=latest" >> $GITHUB_ENV
+            echo "RELEASE_VER=latest" >> $GITHUB_ENV
+          fi
+          # Downcase the repository owner for GHCR / Docker compatibility
+          OWNER="${{ github.repository_owner }}"
+          echo "REPO_OWNER=${OWNER,,}" >> $GITHUB_ENV
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Release image to Docker Hub
+        run: |
+          make TAG=${{ env.TAG }} RELEASE_VER=${{ env.RELEASE_VER }} \
+            IMAGE_PREFIX=volcanosh \
+            DOCKER_PLATFORMS="linux/amd64,linux/arm64" \
+            BUILDX_OUTPUT_TYPE=registry \
+            release
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release image to GitHub Container Registry
+        run: |
+          make TAG=${{ env.TAG }} RELEASE_VER=${{ env.RELEASE_VER }} \
+            IMAGE_PREFIX=ghcr.io/${{ env.REPO_OWNER }} \
+            DOCKER_PLATFORMS="linux/amd64,linux/arm64" \
+            BUILDX_OUTPUT_TYPE=registry \
+            release
+
+      - name: Logout from registries
+        if: always()
+        run: |
+          docker logout
+          docker logout ghcr.io
