@@ -88,32 +88,33 @@ func CreateOrUpdateNumatopo(client versioned.Interface, cached *v1alpha1.Numatop
 				klog.Errorf("Get existing Numatopo for node %s failed, err=%v", hostname, err)
 				return
 			}
+			// Resource already exists, fall through to update it below.
 		} else {
 			// Create succeeded, no immediate update is needed.
 			klog.V(4).Infof("Created Numatopo for node %s successfully", hostname)
 			return
 		}
-	} else {
-		// Resource exists in cache, update it
-		numaInfo := cached.DeepCopy()
-		numaInfo.Spec = v1alpha1.NumatopoSpec{
-			Policies:       GetPolicy(),
-			ResReserved:    GetResReserved(),
-			NumaResMap:     GetAllResAllocatableInfo(),
-			CPUDetail:      GetCpusDetail(),
-			PodAllocations: GetPodAllocations(),
-		}
-		if numaInfo.Annotations == nil {
-			numaInfo.Annotations = make(map[string]string)
-		}
-		// use to trigger CR numa update
-		numaInfo.Annotations["timestamp"] = fmt.Sprint(time.Now().Unix())
+	}
 
-		_, err := client.NodeinfoV1alpha1().Numatopologies().Update(context.TODO(), numaInfo, metav1.UpdateOptions{})
-		if err != nil {
-			klog.Errorf("Update Numatopo for node %s failed, err=%v", hostname, err)
-		} else {
-			klog.V(4).Infof("Updated Numatopo for node %s successfully", hostname)
-		}
+	// Resource exists (either provided in cache or fetched above), update it
+	numaInfo := cached.DeepCopy()
+	numaInfo.Spec = v1alpha1.NumatopoSpec{
+		Policies:       GetPolicy(),
+		ResReserved:    GetResReserved(),
+		NumaResMap:     GetAllResAllocatableInfo(),
+		CPUDetail:      GetCpusDetail(),
+		PodAllocations: GetPodAllocations(),
+	}
+	if numaInfo.Annotations == nil {
+		numaInfo.Annotations = make(map[string]string)
+	}
+	// use to trigger CR numa update
+	numaInfo.Annotations["timestamp"] = fmt.Sprint(time.Now().Unix())
+
+	_, err := client.NodeinfoV1alpha1().Numatopologies().Update(context.TODO(), numaInfo, metav1.UpdateOptions{})
+	if err != nil {
+		klog.Errorf("Update Numatopo for node %s failed, err=%v", hostname, err)
+	} else {
+		klog.V(4).Infof("Updated Numatopo for node %s successfully", hostname)
 	}
 }

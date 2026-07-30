@@ -226,7 +226,7 @@ func (info *CPUNumaInfo) numaCapUpdate(numaPath string) {
 }
 
 func (info *CPUNumaInfo) numaAllocUpdate(cpuMngState string, enableGetCpuIDByPodResourceList bool) error {
-	freeCPUList := make([]int, 0)
+	var freeCPUList []int
 	var err error
 	if enableGetCpuIDByPodResourceList {
 		freeCPUList, info.podAllocations, err = GetFreeCPUListAndPodAllocationsByPodResources(info.cpu2NUMA)
