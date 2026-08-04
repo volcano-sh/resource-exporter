@@ -42,8 +42,7 @@ release: init
 		--platform ${DOCKER_PLATFORMS} \
 		--output=type=${BUILDX_OUTPUT_TYPE} \
 		--build-arg LD_FLAGS=${LD_FLAGS} \
-		-t ${IMAGE_PREFIX}/${IMAGE_NAME}:${TAG} \
-		-t ${IMAGE_PREFIX}/${IMAGE_NAME}:${RELEASE_VER} \
+		$(foreach tag,$(IMAGE_TAGS),-t ${IMAGE_PREFIX}/${IMAGE_NAME}:$(tag) ) \
 		-f ./docker/Dockerfile .
 
 clean:

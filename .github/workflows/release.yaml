@@ -1,23 +1,22 @@
-name: daily release
+name: release
 
 on:
   schedule:
-    # Runs at 0:00 and 12:00 UTC every day to publish a rolling `latest` image
+    # Runs at 0:00 and 12:00 UTC every day to publish a rolling `edge` image
     - cron: '0 */12 * * *'
   # Automatically push the image when releasing a version
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
   # Allow manually triggering the workflow for debugging
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: write
+  packages: write
 
 jobs:
   docker:
-    permissions:
-      contents: read
-      packages: write
     runs-on: ubuntu-latest
     steps:
       - name: Install Go
@@ -30,18 +29,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine image tag
+      - name: Determine release metadata
         run: |
           if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "TAG=${{ github.ref_name }}" >> $GITHUB_ENV
-            echo "RELEASE_VER=${{ github.ref_name }}" >> $GITHUB_ENV
+            while IFS= read -r line; do
+              echo "$line" >> "$GITHUB_ENV"
+            done < <(./scripts/release.sh metadata "${{ github.ref_name }}")
           else
-            echo "TAG=latest" >> $GITHUB_ENV
-            echo "RELEASE_VER=latest" >> $GITHUB_ENV
+            echo "VERSION=edge" >> "$GITHUB_ENV"
+            echo "IMAGE_TAGS=edge" >> "$GITHUB_ENV"
+            echo "IS_TAG_BUILD=false" >> "$GITHUB_ENV"
+          fi
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "IS_TAG_BUILD=true" >> "$GITHUB_ENV"
           fi
           # Downcase the repository owner for GHCR / Docker compatibility
           OWNER="${{ github.repository_owner }}"
           echo "REPO_OWNER=${OWNER,,}" >> $GITHUB_ENV
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]] && [ "${LATEST_TAG:-false}" = "true" ]; then
+            echo "IMAGE_TAGS=${TAG} latest" >> "$GITHUB_ENV"
+          elif [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "IMAGE_TAGS=${TAG}" >> "$GITHUB_ENV"
+          fi
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -65,7 +74,7 @@ jobs:
 
       - name: Release image to Docker Hub
         run: |
-          make TAG=${{ env.TAG }} RELEASE_VER=${{ env.RELEASE_VER }} \
+          make VERSION=${{ env.VERSION }} IMAGE_TAGS="${{ env.IMAGE_TAGS }}" \
             IMAGE_PREFIX=volcanosh \
             DOCKER_PLATFORMS="linux/amd64,linux/arm64" \
             BUILDX_OUTPUT_TYPE=registry \
@@ -80,11 +89,33 @@ jobs:
 
       - name: Release image to GitHub Container Registry
         run: |
-          make TAG=${{ env.TAG }} RELEASE_VER=${{ env.RELEASE_VER }} \
+          make VERSION=${{ env.VERSION }} IMAGE_TAGS="${{ env.IMAGE_TAGS }}" \
             IMAGE_PREFIX=ghcr.io/${{ env.REPO_OWNER }} \
             DOCKER_PLATFORMS="linux/amd64,linux/arm64" \
             BUILDX_OUTPUT_TYPE=registry \
             release
+
+      - name: Generate release manifest
+        if: env.IS_TAG_BUILD == 'true'
+        run: |
+          manifest_path="$(./scripts/release.sh generate-manifest "${{ env.TAG }}" "$RUNNER_TEMP")"
+          echo "MANIFEST_PATH=$manifest_path" >> "$GITHUB_ENV"
+
+      - name: Create or update GitHub Release
+        if: env.IS_TAG_BUILD == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prerelease_flag=()
+          if [ "${{ env.PRERELEASE }}" = "true" ]; then
+            prerelease_flag+=(--prerelease)
+          fi
+
+          if gh release view "${{ env.TAG }}" >/dev/null 2>&1; then
+            gh release upload "${{ env.TAG }}" "${{ env.MANIFEST_PATH }}" --clobber
+          else
+            gh release create "${{ env.TAG }}" "${{ env.MANIFEST_PATH }}" "${prerelease_flag[@]}"
+          fi
 
       - name: Logout from registries
         if: always()
