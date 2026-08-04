@@ -13,8 +13,6 @@ Resource Exporter supports the CPU NUMA topology resource so far.  More resource
    make image [TAG=XXX]
 ```
 
-Release images are tag-driven. Push a semantic version tag such as `v1.0.0-rc.1` or `v1.0.0` and GitHub Actions will publish matching multi-architecture images to Docker Hub and GHCR. Stable tags also publish `latest`; scheduled or manual non-tag runs publish the rolling `edge` image.
-
 ### Prerequisites
 
 - Volcano has been installed,  refer to [ volcano Install Guide](https://github.com/volcano-sh/volcano/blob/master/installer/README.md)
@@ -39,10 +37,4 @@ There are some options which you can use to configure
    kubectl apply -f ./installer/numa-topo.yaml
 ````
 
-For releases, use the versioned manifest asset attached to the corresponding GitHub Release (for example `resource-exporter-v1.0.0.yaml`). It is generated from `installer/numa-topo.yaml` with the image updated to the exact tag that was released.
-
-## Release process
-
-1. Merge the fixes you want to ship into `master`.
-2. Create and push a semantic version tag such as `v1.0.0-rc.1` or `v1.0.0`.
-3. Let the release workflow publish the images, generate the versioned install manifest, and create or update the GitHub Release automatically.
+For releases, create and push a semantic version tag such as `v1.0.0-rc.1` or `v1.0.0`. GitHub Actions publishes matching multi-architecture images to Docker Hub and GHCR, generates a versioned manifest asset such as `resource-exporter-v1.0.0.yaml` from `installer/numa-topo.yaml`, and creates or updates the corresponding GitHub Release. Stable tags also publish `latest`; scheduled or manual non-tag runs publish the rolling `edge` image.
