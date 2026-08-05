@@ -1,4 +1,4 @@
-name: release
+name: daily release
 
 on:
   schedule:
