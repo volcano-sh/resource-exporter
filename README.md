@@ -6,6 +6,14 @@ Notes:
 
 Resource Exporter supports the CPU NUMA topology resource so far.  More resources will be included in the future.
 
+## Compatibility
+
+Resource Exporter does not currently impose a strict Kubernetes version restriction. Kubernetes v1.35.3 in `go.mod` is the dependency version used to build Resource Exporter v1.0.0, not a minimum or exact Kubernetes cluster version.
+
+The kubelet PodResources API was available before Kubernetes v1.28 and graduated to GA in v1.28. Resource Exporter only uses its `List` operation for CPU allocation collection. This collection is optional and can be disabled with `--enable-pod-resource=false`; if the PodResources client cannot be initialized, Resource Exporter falls back to reading `cpu_manager_state`. Users running older Kubernetes versions should verify that the kubelet PodResources API is available or use this compatibility mode.
+
+Resource Exporter v1.0.0 reports the `Numatopology.spec.podAllocations` field, so Volcano v1.15.x and its `Numatopology` CRD are recommended. Future release notes should identify the aligned Kubernetes dependency version, the recommended Volcano and CRD version, and any kubelet API requirements.
+
 ## Quick Start Guide
 
 ### Compilation
