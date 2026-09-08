@@ -69,6 +69,8 @@ func Parse(s string) ([]int, error) {
 			for e := start; e <= end; e++ {
 				result = append(result, e)
 			}
+		} else {
+			return []int{}, fmt.Errorf("invalid range %q in %q", r, s)
 		}
 	}
 

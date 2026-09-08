@@ -145,3 +145,38 @@ func TestParseResourceList(t *testing.T) {
 		}
 	})
 }
+
+func TestParse(t *testing.T) {
+	testCases := []struct {
+		name    string
+		input   string
+		expect  []int
+		wantErr bool
+	}{
+		{name: "empty", input: "", expect: []int{}},
+		{name: "single", input: "34", expect: []int{34}},
+		{name: "range", input: "0-3", expect: []int{0, 1, 2, 3}},
+		{name: "mixed", input: "0-5,34,46-48", expect: []int{0, 1, 2, 3, 4, 5, 34, 46, 47, 48}},
+		{name: "non-numeric", input: "a", wantErr: true},
+		{name: "malformed multi-dash range", input: "1-2-3", wantErr: true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Parse(tc.input)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Parse(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+			}
+			if tc.wantErr {
+				return
+			}
+			if len(got) != len(tc.expect) {
+				t.Fatalf("Parse(%q) = %v, want %v", tc.input, got, tc.expect)
+			}
+			for i := range got {
+				if got[i] != tc.expect[i] {
+					t.Fatalf("Parse(%q) = %v, want %v", tc.input, got, tc.expect)
+				}
+			}
+		})
+	}
+}
