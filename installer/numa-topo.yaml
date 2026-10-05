@@ -62,7 +62,9 @@ spec:
             - --logtostderr
             - --kubelet-conf=/host/kubeletconf/config.yaml
             - --cpu-manager-state=/host/kubelet/cpu_manager_state
+            - --device-plugin-checkpoint=/host/kubelet/device-plugins/kubelet_internal_checkpoint
             - --device-path=/host/device
+            - --pci-device-path=/host/sys/bus/pci/devices
             - --pod-resource-sock=/host/podresources
             - --enable-pod-resource=true
             - -v=4
@@ -75,6 +77,12 @@ spec:
           volumeMounts:
             - name: node-path
               mountPath: "/host/device"
+            # Whole host sysfs, read-only: /sys/bus/pci/devices entries are
+            # relative symlinks into /sys/devices, so mounting only the
+            # subdirectory would leave them dangling.
+            - name: host-sys
+              mountPath: "/host/sys"
+              readOnly: true
             - name: kubelet-path
               mountPath: "/host/kubelet"
             - name: kubelet-config-path
@@ -86,6 +94,9 @@ spec:
         - name: node-path
           hostPath:
             path: "/sys/devices/system"
+        - name: host-sys
+          hostPath:
+            path: "/sys"
         - name: kubelet-path
           hostPath:
             path: "/var/lib/kubelet"

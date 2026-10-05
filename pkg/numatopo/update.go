@@ -72,6 +72,7 @@ func CreateOrUpdateNumatopo(client versioned.Interface, cached *v1alpha1.Numatop
 				ResReserved:    GetResReserved(),
 				NumaResMap:     GetAllResAllocatableInfo(),
 				CPUDetail:      GetCpusDetail(),
+				GPUDetail:      GetGpusDetail(),
 				PodAllocations: GetPodAllocations(),
 			},
 		}
@@ -103,6 +104,7 @@ func CreateOrUpdateNumatopo(client versioned.Interface, cached *v1alpha1.Numatop
 		ResReserved:    GetResReserved(),
 		NumaResMap:     GetAllResAllocatableInfo(),
 		CPUDetail:      GetCpusDetail(),
+		GPUDetail:      GetGpusDetail(),
 		PodAllocations: GetPodAllocations(),
 	}
 	if numaInfo.Annotations == nil {

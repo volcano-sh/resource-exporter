@@ -29,6 +29,8 @@ There are some options which you can use to configure
 |kubelet-conf|specify kubelet configuration file path to get its configuration|/var/lib/kubelet/config.yaml|
 |cpu-manager-state| specify the cpu manager state file path in kubelet to get get the real-time CPU topology data| /var/lib/kubelet/cpu_manager_state|
 |device-path|specify the system device path to get the NUMA data of worker node| /sys/devices/system|
+|pci-device-path|specify the sysfs PCI device directory scanned for NVIDIA GPUs and their NUMA node; point it at a host mount of `/sys` if the container runtime masks sysfs| /sys/bus/pci/devices|
+|device-plugin-checkpoint|specify the kubelet device plugin checkpoint used to exclude GPUs already allocated to pods from `allocatable`| ""|
 |res-reserved| specify the reserved resource of worker node; if the reserved resource is configured in the kubelet configuration file, you can ignore it|""|
 
 #### 2. Deploy resource exporter
